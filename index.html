@@ -1,0 +1,1761 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, nofollow, noarchive">
+<title>SPACE COUNTER アドバンスド版</title>
+<style>
+/* Layout: 上部ツールバー ／ 左に図面キャンバス、右に編集パネル（狭い画面では縦積み） */
+:root{
+  --bg:#eef1f0; --surface:#ffffff; --surface-2:#f6f8f7; --line:#d5dcd9; --fg:#1d2624; --muted:#5f6c68;
+  --accent:#1f5f8b; --accent-ink:#ffffff; --danger:#b42318; --canvas:#dfe4e2; --ring:#f2b705;
+  --t-general:#3b6fb6; --t-focus:#6a4fb0; --t-openmtg:#23897a; --t-booth:#c2410c;
+  --t-inroom:#b4335a; --t-guest:#86691a; --t-cafe:#4d8a35; --t-other:#6b7280;
+  --font-ui: "Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --font-num: "SF Mono","Consolas","Menlo",ui-monospace,monospace;
+  --r:6px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a19; --surface:#1c2422; --surface-2:#222c2a; --line:#33403d; --fg:#e4ebe9; --muted:#9aa8a4;
+  --accent:#5aa3d6; --accent-ink:#0d1a24; --danger:#f97066; --canvas:#0e1312; --ring:#f5c33b; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a19; --surface:#1c2422; --surface-2:#222c2a; --line:#33403d; --fg:#e4ebe9; --muted:#9aa8a4;
+  --accent:#5aa3d6; --accent-ink:#0d1a24; --danger:#f97066; --canvas:#0e1312; --ring:#f5c33b; color-scheme:dark}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-ui);font-size:13px;margin:0}
+.app{display:flex;flex-direction:column;height:100%;min-height:0}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 16px;background:var(--surface);border-bottom:1px solid var(--line)}
+h1{font-size:15px;margin:0;letter-spacing:.02em;white-space:nowrap}
+h1 small{font-weight:400;color:var(--muted);font-size:11px;margin-left:6px}
+.grp{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.sep{width:1px;height:22px;background:var(--line)}
+button,.btn{font:inherit;color:var(--fg);background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r);padding:5px 10px;cursor:pointer;line-height:1.3}
+button:hover,.btn:hover{border-color:var(--muted)}
+button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button.primary,.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.danger{color:var(--danger)}
+button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.ic{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ic .f{fill:currentColor;stroke:none}
+button,.btn{display:inline-flex;align-items:center;gap:6px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{border:0;border-radius:0}
+.seg button+button{border-left:1px solid var(--line)}
+.lbl{font-size:11px;color:var(--muted);letter-spacing:.04em}
+input[type=file]{display:none}
+select,input[type=text],input[type=number],textarea{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:5px 8px;min-width:0}
+.typesel{display:flex;flex-wrap:wrap;gap:4px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;font-size:12px;background:var(--surface-2);border:1px solid var(--line);cursor:pointer}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+.chip[aria-pressed="true"]{background:var(--c);border-color:var(--c);color:#fff}
+.chip[aria-pressed="true"] i{background:#fff}
+
+.tabs{display:flex;gap:2px;padding:6px 16px 0;background:var(--bg);overflow-x:auto;flex:none}
+.tab{border:1px solid var(--line);border-bottom:0;border-radius:var(--r) var(--r) 0 0;background:var(--surface-2);padding:5px 12px;white-space:nowrap;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--canvas);color:var(--fg);font-weight:600}
+.tab .n{font-family:var(--font-num);font-size:11px;margin-left:6px;color:var(--muted)}
+
+main{flex:1;display:flex;min-height:0}
+.vp{flex:1;position:relative;overflow:hidden;background:var(--canvas);touch-action:none;cursor:crosshair;min-width:0}
+.vp.sel{cursor:default}
+.vp.panning{cursor:grabbing}
+.stage{position:absolute;left:0;top:0;transform-origin:0 0}
+.stage img{display:block;max-width:none;user-select:none;-webkit-user-drag:none;pointer-events:none;box-shadow:0 1px 8px rgba(0,0,0,.18)}
+.mk{position:absolute;width:0;height:0}
+.mk b{position:absolute;left:0;top:0;transform:translate(-50%,-50%) scale(var(--inv,1));display:grid;place-items:center;min-width:calc(24px*var(--ps,1));height:calc(24px*var(--ps,1));padding:0 calc(4px*var(--ps,1));box-sizing:border-box;border-radius:calc(12px*var(--ps,1));background:var(--c);color:#fff;font:600 calc(11px*var(--ps,1)*var(--fs,1))/1 var(--font-num);border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.45);cursor:grab;white-space:nowrap}
+.mk.on b{box-shadow:0 0 0 3px var(--ring),0 1px 3px rgba(0,0,0,.45);z-index:2}
+.mk.dup b{border-style:dashed;border-color:var(--ring)}
+.mk.nocap b::after{content:"!";position:absolute;right:-7px;top:-7px;width:13px;height:13px;border-radius:50%;background:var(--danger);color:#fff;font:700 9px/13px var(--font-ui);text-align:center;border:1px solid #fff}
+.req{color:var(--danger)}
+input.miss{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,var(--surface))}
+.mk.dim b{opacity:.18}
+.mk b{transform:translate(-50%,-50%) rotate(var(--rot,0deg)) scale(var(--inv,1))}
+.mk.sq b{border-radius:calc(4px*var(--ps,1));min-width:calc(30px*var(--ps,1));height:calc(22px*var(--ps,1))}
+.mk.other b{opacity:.3;pointer-events:none;cursor:default;box-shadow:none}
+.pal-kind{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:3px;background:#1d2740;border-radius:10px}
+.pal-kind button{border:0;background:transparent;color:rgba(232,238,250,.75);justify-content:center;gap:6px;padding:8px 4px;font-size:12.5px;font-weight:700;border-radius:8px;white-space:nowrap}
+.pal-kind button[aria-pressed="true"]{background:#3f72d8;color:#fff}
+.kd{display:inline-block;width:11px;height:11px;border:2px solid currentColor;flex:none}
+.kd.c{border-radius:50%}.kd.q{border-radius:2px}
+.pal-view{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px;background:var(--surface-2);border-radius:8px}
+.pal-view button{border:0;background:transparent;justify-content:center;padding:5px 2px;font-size:11.5px;border-radius:6px;color:var(--muted)}
+.pal-view button[aria-pressed="true"]{background:var(--surface);color:var(--fg);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+.palette.min .pal-kind{grid-template-columns:1fr}.palette.min .pal-kind span,.palette.min .pal-view{display:none}
+.fmv{font:600 14px var(--font-num)}
+.code{display:inline-block;min-width:1.6em;font:700 11px var(--font-num);color:var(--muted);margin-right:4px}
+.orow input.cd{width:52px;flex:none;text-align:center;font-family:var(--font-num);font-weight:700}
+.stats tr.grand td{font-weight:600;color:var(--muted);border-bottom:0}
+.gl{position:absolute;background:var(--ring);pointer-events:none;z-index:1}
+.gl.v{top:0;width:calc(var(--inv,1)*1.5px);transform:translateX(-50%)}
+.gl.h{left:0;height:calc(var(--inv,1)*1.5px);transform:translateY(-50%)}
+.gl.eq{background:repeating-linear-gradient(90deg,var(--ring) 0 6px,transparent 6px 10px)}
+.gl.v.eq{background:repeating-linear-gradient(180deg,var(--ring) 0 6px,transparent 6px 10px)}
+.ghost{pointer-events:none}
+.ghost b{opacity:.55;cursor:crosshair}
+.hint{position:absolute;right:12px;bottom:12px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;color:var(--muted);font-size:12px;line-height:1.5;max-width:calc(100% - 300px)}
+@media (max-width:700px){.hint{display:none}}
+.zoom{position:absolute;left:12px;bottom:12px;z-index:3;display:flex;align-items:center;gap:4px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.14)}
+.zoom button{width:34px;height:34px;padding:0;justify-content:center;border:0;border-radius:50%;background:var(--surface-2)}
+.zoom button:hover{background:var(--line)}
+.zoom .pct{width:auto;min-width:54px;border-radius:999px;background:transparent;font:600 12px var(--font-num);font-variant-numeric:tabular-nums}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--muted);padding:24px}
+
+aside{width:330px;flex:none;background:var(--surface);border-left:1px solid var(--line);overflow:hidden;display:flex;flex-direction:column}
+#secEdit{flex:1 1 auto;min-height:0;overflow-y:auto}
+.center{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0}
+.center .vp{flex:1}
+.missbox{flex:none;border-top:1px solid var(--line);padding:10px 16px;background:color-mix(in srgb,var(--danger) 6%,var(--surface))}
+.missbox button{width:100%;justify-content:space-between;color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line));background:var(--surface);font-weight:600}
+.missbox .sm{display:block;margin-top:4px;color:var(--danger);opacity:.85}
+.statbar_unused{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:7px 12px;background:var(--surface);border-top:1px solid var(--line);font-size:12px;min-height:44px}
+.sb-k{font-weight:700;color:var(--muted);white-space:nowrap}
+.sb-chips{display:flex;flex-wrap:wrap;gap:5px;flex:1;min-width:0}
+.sb-chip{gap:6px;padding:3px 9px 3px 4px;border-radius:999px;font-size:12px;background:var(--surface-2);border:1.5px solid var(--line);white-space:nowrap}
+.sb-chip i{display:grid;place-items:center;min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:var(--c);color:#fff;font:700 10.5px var(--font-num);font-style:normal}
+.sb-chip i.q{border-radius:4px}
+.sb-chip b{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.sb-v{color:var(--muted);font:11px var(--font-num)}
+.sb-chip:hover{border-color:var(--c)}
+.sb-chip.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 12%,var(--surface));box-shadow:0 0 0 1px var(--c)}
+.sb-tot,.sb-all{white-space:nowrap;font-variant-numeric:tabular-nums}
+.sb-tot b,.sb-all b{font-family:var(--font-num)}
+.sb-all{color:var(--muted)}
+.sb-miss{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line));background:color-mix(in srgb,var(--danger) 7%,var(--surface));font-size:12px;padding:3px 10px;border-radius:999px}
+.pt.selt{box-shadow:0 0 0 2px var(--ring)}
+aside .copy{flex:none;margin-top:0}
+section{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+h2{font-size:11px;letter-spacing:.08em;color:var(--muted);margin:0;font-weight:600}
+.row{display:grid;grid-template-columns:64px 1fr;align-items:center;gap:8px}
+.row>span{color:var(--muted);font-size:12px}
+textarea{resize:vertical;min-height:44px}
+.muted{color:var(--muted)}
+.edit-head{display:flex;align-items:center;gap:10px}
+#eTypeLbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.enav{display:inline-flex;gap:4px}
+.enav button{width:32px;height:32px;padding:0;justify-content:center;border-radius:50%}
+.badge{display:grid;place-items:center;min-width:34px;height:34px;padding:0 6px;border-radius:17px;background:var(--c);color:#fff;font:600 14px var(--font-num)}
+.stats{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.stats td{padding:4px 0;border-bottom:1px dashed var(--line)}
+.stats td:nth-child(2),.stats td:nth-child(3),.stats td:nth-child(4){text-align:right;font-family:var(--font-num);width:50px}
+.stats tr.total td{border-bottom:0;font-weight:600;padding-top:6px}
+.stats tr{cursor:pointer}
+.stats tr.f td:first-child{color:var(--accent);font-weight:600}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--c);margin-right:6px}
+.list{max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--r)}
+.list table{width:100%;border-collapse:collapse;font-size:12px}
+.list td{padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+.list td:first-child{font-family:var(--font-num);width:40px}
+.list tr{cursor:pointer}
+.list tr.on{background:var(--surface-2);outline:1px solid var(--accent);outline-offset:-1px}
+.warn{color:var(--danger);font-size:12px}
+.flex{display:flex;gap:6px;flex-wrap:wrap}
+
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:grid;place-items:center;padding:16px;z-index:10}
+.modal>div{background:var(--surface);border-radius:8px;padding:16px;width:min(560px,100%);display:flex;flex-direction:column;gap:10px}
+.modal textarea{height:200px;font-family:var(--font-num);font-size:11px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:8px 14px;border-radius:var(--r);font-size:12px;z-index:20}
+
+.sv{max-height:calc(100vh - 32px);overflow-y:auto}
+.sv-h{display:flex;justify-content:space-between;align-items:center;font-size:14px}
+.sv-h button{border:0;background:transparent;font-size:18px;padding:0 6px}
+fieldset{border:1px solid var(--line);border-radius:var(--r);padding:8px 12px 12px;margin:0;display:flex;flex-direction:column;gap:8px;min-width:0}
+legend{font-size:11px;color:var(--muted);letter-spacing:.06em;padding:0 4px}
+.ck{display:inline-flex;align-items:center;gap:4px}
+.al{align-items:center}
+.sm{font-size:11px}
+.slots{display:flex;flex-wrap:wrap;gap:4px}
+.slot{font-family:var(--font-num);font-size:12px;padding:3px 8px}
+.slot[aria-pressed="false"]{text-decoration:line-through;color:var(--muted);background:transparent}
+.sv-sum{font-variant-numeric:tabular-nums;padding:8px 12px;background:var(--surface-2);border-radius:var(--r)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.pv{width:min(980px,100%)}
+.modal>div.pv{width:min(980px,100%)}
+.pv-box{background:var(--canvas);border-radius:var(--r);padding:8px;display:grid;place-items:center;max-height:58vh;overflow:auto}
+.pv-box canvas{max-width:100%;max-height:calc(58vh - 16px);height:auto;width:auto;display:block;box-shadow:0 1px 6px rgba(0,0,0,.2)}
+.pv-ctl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px 16px;align-items:center}
+.sl{display:grid;grid-template-columns:72px 1fr 44px;align-items:center;gap:8px;font-size:12px}
+.sl output{font-family:var(--font-num);text-align:right;font-variant-numeric:tabular-nums}
+.sl input{width:100%;min-width:0}
+.copy{margin-top:auto;padding:12px 16px;font-size:11px;color:var(--muted);text-align:right}
+.fld{display:grid;grid-template-columns:96px 1fr;align-items:center;gap:8px;font-size:12px}
+.fld span{color:var(--muted)}
+.qr{display:grid;place-items:center;background:#fff;border-radius:var(--r);padding:8px}
+.qr svg{width:min(240px,70vw);height:auto;display:block}
+#qUrl{width:100%;font-family:var(--font-num);font-size:11px;resize:none}
+.rl{display:flex;flex-direction:column;gap:8px}
+.rs{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
+.rs-t{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.pill{font-size:11px;padding:1px 8px;border-radius:999px;background:var(--line);color:var(--muted)}
+.chipbtn{font-size:12px;padding:3px 9px;border-radius:999px}
+.modal>div.opt{width:min(720px,100%)}
+.ol{display:flex;flex-direction:column;gap:6px;max-height:42vh;overflow-y:auto}
+.orow{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2)}
+.orow input[type=text]{flex:1 1 140px}
+.orow input[type=color]{width:32px;height:28px;padding:0 2px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.orow .use{font-size:11px;font-variant-numeric:tabular-nums;min-width:42px;text-align:right}
+.mv{display:inline-flex;gap:4px;margin-left:auto}
+.mv button{padding:3px 8px}
+#oBulk{width:100%;height:auto;min-height:64px;resize:vertical}
+.palette{position:absolute;left:12px;top:12px;z-index:3;width:200px;max-height:calc(100% - 84px);overflow-y:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.14);padding:8px;display:flex;flex-direction:column;gap:6px;cursor:default}
+.pal-h{display:flex;align-items:center;justify-content:space-between;padding:0 2px 0 4px;font-size:11px;letter-spacing:.06em;color:var(--muted)}
+.pal-h button{border:0;background:transparent;padding:2px 6px;font-size:14px;color:var(--muted)}
+.pal-list{display:flex;flex-direction:column;gap:5px}
+.pt{width:100%;display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:9px;border:2px solid transparent;background:var(--surface-2);font-weight:600;font-size:13px;text-align:left;color:color-mix(in srgb,var(--c) 70%,var(--fg))}
+.pt:hover{border-color:color-mix(in srgb,var(--c) 35%,transparent)}
+.pt i{flex:none;display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:var(--c);color:#fff;font:700 11px var(--font-num);font-style:normal}
+.pt span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pt[aria-pressed="true"]{border-color:var(--c);color:color-mix(in srgb,var(--c) 70%,var(--fg));background:color-mix(in srgb,var(--c) 9%,var(--surface));box-shadow:0 1px 4px color-mix(in srgb,var(--c) 30%,transparent)}
+.pal-mode{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:3px;background:var(--surface-2);border-radius:9px}
+.pal-mode button{white-space:nowrap;border:0;background:transparent;justify-content:center;gap:5px;padding:7px 4px;font-size:12px;font-weight:600;border-radius:7px}
+.pal-mode button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.pal-edit kbd{margin-left:auto;font:10px var(--font-num);color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.palette.min .pal-edit kbd{display:none}
+.pal-h2{font-size:11px;letter-spacing:.06em;color:var(--muted);padding:4px 4px 0}
+.palette.min .pal-mode{grid-template-columns:1fr}
+.palette.min .pal-mode span,.palette.min .pal-h2{display:none}
+.pal-sep{height:1px;background:var(--line);margin:2px 0}
+.pal-edit{width:100%;justify-content:flex-start;font-size:12px;background:var(--surface-2);border-color:transparent;color:var(--muted)}
+.palette.min{width:auto}
+.palette.min .pt span,.palette.min .pal-h span,.palette.min .pal-edit span{display:none}
+.palette.min .pt{padding:6px;justify-content:center}
+.palette.min .pal-edit{justify-content:center;padding:6px}
+.tab{display:inline-flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.tab .n{margin-left:0}
+.tab .tmenu{border:0;background:transparent;padding:0 2px;color:var(--muted);line-height:1}
+.tab .tmenu:hover{color:var(--fg)}
+.tab .tin{font:inherit;font-weight:600;width:12em;padding:1px 6px;border:1px solid var(--accent);border-radius:4px}
+.tab.add{font-weight:600;color:var(--accent);padding:5px 12px;border-style:dashed;background:transparent}
+.tab.add:hover{background:var(--surface)}
+.fmenu{position:fixed;z-index:20;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column;gap:2px;min-width:220px;max-width:280px}
+.fmenu button{border:0;background:transparent;text-align:left;padding:7px 10px;border-radius:6px;justify-content:flex-start}
+.fmenu button:hover{background:var(--surface-2)}
+.fmenu .sm{padding:4px 10px 2px;font-size:11px}
+
+/* ヘッダー：濃紺のバーに色付きボタン（収納量調査アプリと同じ系統） */
+:root{--hd-bg:#1d2740;--hd-bg2:#18213a;--hd-fg:#eef2fa;--hd-muted:rgba(232,238,250,.55);--hd-line:rgba(255,255,255,.14);--hd-btn:rgba(255,255,255,.08);
+  --hd-blue:#3f72d8;--hd-teal:#1d8a7a;--hd-purple:#6a4fc6;--hd-slate:#48557a}
+header{background:linear-gradient(180deg,var(--hd-bg),var(--hd-bg2));color:var(--hd-fg);border-bottom:0;padding:10px 18px;gap:8px 12px;box-shadow:0 1px 0 rgba(0,0,0,.25)}
+header h1{display:flex;align-items:center;gap:10px;color:#fff;font-size:16px;font-weight:700;margin-right:6px}
+header .logo{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--hd-blue);color:#fff;font-size:15px;font-weight:700;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+header .lbl{color:var(--hd-muted)}
+header .sep{background:var(--hd-line)}
+header button,header .btn{background:var(--hd-btn);border:1px solid var(--hd-line);color:var(--hd-fg);font-weight:600;border-radius:8px;padding:6px 12px}
+header button:hover,header .btn:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3)}
+header button:focus-visible,header .btn:focus-visible{outline:2px solid #fff;outline-offset:2px}
+header .primary,header .btn.primary,header #lAddImg{background:var(--hd-blue);border-color:var(--hd-blue);color:#fff}
+header #lAddImg{box-shadow:0 0 0 2px var(--hd-bg),0 0 0 3px rgba(255,255,255,.85)}
+header .seg{border:1px solid var(--hd-line);border-radius:8px;background:var(--hd-btn)}
+header .seg button{background:transparent;border:0;border-radius:0}
+header .seg button+button{border-left:1px solid var(--hd-line)}
+header button[aria-pressed="true"]{background:var(--hd-blue);border-color:var(--hd-blue);color:#fff}
+header #bXlsx{background:var(--hd-blue);border-color:var(--hd-blue)}
+header #bXlsx{box-shadow:0 0 0 2px var(--hd-bg),0 0 0 3px rgba(255,255,255,.8);padding-inline:14px;color:#fff}
+header #bXlsx:hover{filter:brightness(1.12)}
+header #bRemote{background:var(--hd-teal);border-color:var(--hd-teal);color:#fff}
+header #bPng{background:var(--hd-slate);border-color:var(--hd-slate);color:#fff}
+header #bSave{background:var(--hd-slate);border-color:var(--hd-slate);color:#fff}
+header .wf{font-size:11px;color:var(--hd-muted);margin-right:-2px}
+header #bSurvey{box-shadow:0 0 0 2px var(--hd-bg),0 0 0 3px rgba(255,255,255,.8);padding-inline:14px}
+header #lOpen{background:var(--hd-slate);border-color:var(--hd-slate);color:#fff}
+header #bSurvey:hover,header #bRemote:hover,header #bPng:hover,header #bSave:hover,header #lOpen:hover,header #lAddImg:hover{filter:brightness(1.12)}
+.tabs{background:#e9ecf1;border-bottom:1px solid var(--line)}
+@media (max-width:1700px){header h1 small{display:none}header .lbl{display:none}header #bUndo .tx{display:none}header{gap:8px 10px}header button,header .btn{padding:6px 10px}}
+@media (max-width:1100px){header #lAddImg{box-shadow:none}}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--hd-bg:#141b2e;--hd-bg2:#10172a}:root:not([data-theme="light"]) .tabs{background:var(--bg)}}
+:root[data-theme="dark"]{--hd-bg:#141b2e;--hd-bg2:#10172a}
+:root[data-theme="dark"] .tabs{background:var(--bg)}
+.marquee{position:absolute;z-index:2;border:1.5px dashed var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);pointer-events:none;border-radius:2px}
+.sm{font-size:11px}
+.hd-copy{margin-left:auto;font-size:11px;color:var(--hd-muted);white-space:nowrap;align-self:flex-start;padding-top:2px}
+header .rng{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--hd-fg)}
+header .rng input{width:84px;accent-color:var(--hd-blue)}
+header .rng output{font:600 11px var(--font-num);color:var(--hd-muted);min-width:34px}
+header #pinReset{padding:5px 10px;font-size:12px}
+@media (max-width:820px){
+  main{flex-direction:column}
+  .center .vp{flex:none;height:58vh}
+  aside{width:auto;border-left:0;border-top:1px solid var(--line);overflow:visible}
+  #secEdit{max-height:none;overflow:visible}
+  .center{flex:none}
+  html,body{height:auto}
+  .app{height:auto}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---- アドバンスド版：見本から自動で探す ---- */
+header .adv{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8px;border-radius:999px;background:var(--hd-blue);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
+.vp{-webkit-user-select:none;user-select:none}
+/* パレットの集計（タイプごとの件数・フロアの合計） */
+.pt em{margin-left:auto;padding-left:4px;font:700 12.5px var(--font-num);font-style:normal;color:var(--fg);font-variant-numeric:tabular-nums}
+.pt em.z{color:var(--muted);font-weight:400}
+.palette.min .pt em{display:none}
+.pal-sum{display:grid;grid-template-columns:1fr auto;gap:3px 8px;padding:8px 10px;border-radius:9px;background:var(--surface-2);font-size:12px;align-items:baseline}
+.pal-sum .h{grid-column:1/-1;font-size:11px;color:var(--muted);letter-spacing:.06em;margin-bottom:1px}
+.pal-sum b{font:700 13px var(--font-num);text-align:right;font-variant-numeric:tabular-nums}
+.pal-sum .o{grid-column:1/-1;font-size:11px;color:var(--muted);border-top:1px solid var(--line);padding-top:5px;margin-top:3px}
+.palette.min .pal-sum{display:none}
+#mAuto{width:100%;justify-content:center;gap:6px;padding:7px 4px;font-size:12px;font-weight:600;border-radius:9px;background:var(--surface-2);border:1px dashed color-mix(in srgb,var(--accent) 55%,var(--line));color:var(--fg);white-space:nowrap}
+#mAuto[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-style:solid;border-color:var(--accent)}
+.palette.min #mAuto span{display:none}
+.cand{position:absolute;width:0;height:0}
+.cand i{position:absolute;box-sizing:border-box;border:calc(1px*var(--inv,1)) dashed var(--c);opacity:.75;pointer-events:none;transform:translate(-50%,-50%)}
+.cand b{position:absolute;left:0;top:0;transform:translate(-50%,-50%) scale(var(--inv,1));display:grid;place-items:center;min-width:calc(22px*var(--ps,1));height:calc(22px*var(--ps,1));padding:0 calc(3px*var(--ps,1));box-sizing:border-box;border-radius:calc(11px*var(--ps,1));background:rgba(255,255,255,.9);color:var(--c);font:700 calc(10.5px*var(--ps,1)*var(--fs,1))/1 var(--font-num);border:2px dashed var(--c);cursor:pointer;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.cand.sq b{border-radius:calc(4px*var(--ps,1))}
+.cand.weak b{border-color:#e08a00;color:#a85f00}
+.cand.weak i{border-color:#e08a00}
+.cand.man b{border-style:dotted}
+.cand.off b{background:rgba(255,255,255,.75);border-color:#8a8f98;color:#8a8f98;box-shadow:none}
+.cand.off i{border-color:#8a8f98;opacity:.4}
+.sbox{position:absolute;box-sizing:border-box;border:calc(2px*var(--inv,1)) solid #2f6fe0;background:rgba(47,111,224,.10);pointer-events:none}
+.sbox.area{border-style:dashed;background:transparent}
+.vp-busy{position:absolute;inset:0;z-index:4;display:grid;place-items:center;background:rgba(255,255,255,.35);cursor:progress}
+.vp-busy>div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 18px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.14)}
+#secAuto{flex:1 1 auto;min-height:0;overflow-y:auto}
+.au-step{display:grid;grid-template-columns:24px 1fr;gap:8px;align-items:start}
+.au-step>i{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--line);color:var(--muted);font:700 12px var(--font-num);font-style:normal}
+.au-step.on>i{background:var(--accent);color:var(--accent-ink)}
+.au-step.done>i{background:color-mix(in srgb,var(--accent) 30%,var(--surface));color:var(--accent)}
+.au-step:not(.on) b{color:var(--muted)}
+.au-step .sm{line-height:1.6}
+.au-thumb{display:flex;align-items:center;gap:10px}
+.au-thumb canvas{flex:none;max-width:120px;max-height:96px;image-rendering:pixelated;background:#fff;border:2px solid #2f6fe0;border-radius:4px}
+.au-btns{display:flex;flex-direction:column;gap:6px}
+.au-btns button{justify-content:center;padding:8px 10px}
+.au-count{display:flex;align-items:baseline;gap:8px}
+.au-count b{font:700 26px var(--font-num);font-variant-numeric:tabular-nums}
+.au-tip{font-size:11.5px;line-height:1.6;color:var(--muted);background:var(--surface-2);border-radius:var(--r);padding:8px 10px}
+.au-key{display:inline-block;width:10px;height:10px;border-radius:50%;border:2px dashed var(--accent);vertical-align:-1px;margin:0 2px}
+.au-key.w{border-color:#e08a00}
+#secAuto .sl{grid-template-columns:88px 1fr 40px}
+</style>
+</head><body>
+
+<div class="app">
+<header>
+  <h1 title="座席・スペースと収納什器のプロット（見本から自動で探す機能つき）">SPACE COUNTER<span class="adv">アドバンスド版</span><small style="color:var(--hd-muted)">スペース・収納量の数量プロッター</small></h1>
+  <input type="file" id="fImg" accept="image/*">
+  <div class="grp">
+    <span class="lbl">出力</span>
+    <button id="bXlsx" class="primary" title="スペースと収納量の一覧・集計を、シートに分けて1つのExcelで出力します"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>Excelを出力</button>
+    <button id="bPng" title="表示中のフロアを、表示フィルタに合わせたプロット図面（PNG）で保存します"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M21 16l-5-5-9 9"/></svg>図面画像</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp pinctl" title="図面上のプロットの見た目を調整します（調査票・画像の出力には影響しません）">
+    <span class="wf">プロット表示：</span>
+    <label class="rng"><span>大きさ</span><input type="range" id="pinSize" min="50" max="250" step="10" value="100" aria-label="プロットの大きさ"><output id="pinSizeV">100%</output></label>
+    <label class="rng"><span>文字</span><input type="range" id="pinText" min="50" max="200" step="10" value="100" aria-label="文字の大きさ"><output id="pinTextV">100%</output></label>
+    <button id="pinReset" title="大きさと文字を100%に戻します">リセット</button>
+    <span class="wf" style="margin-left:6px">番号：</span><div class="seg" id="numSeg" role="group" aria-label="番号の表示"><button data-n="no" title="フロア内の通し番号（1, 2, 3…）を表示">通し</button><button data-n="type" title="タイプの記号＋タイプ内の番号（A-1, A-2…）を表示">種類別</button></div>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="wf">作業ファイル：</span>
+    <button id="bSave" title="図面とプロットをまとめて1つのファイルに保存します（別のPCへの引き継ぎ・バックアップ用）"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>保存</button>
+    <label class="btn" id="lOpen" for="fJson" title="「保存」で作ったファイルを開いて、作業を再開します"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>開く</label>
+    <input type="file" id="fJson" accept=".json,application/json">
+  </div>
+  <div class="hd-copy">© 合同会社mokume　無断複製・再配布禁止</div>
+</header>
+
+<nav class="tabs" id="tabs" role="tablist"></nav>
+<input type="file" id="fReplace" accept="image/*">
+
+<main>
+  <div class="center">
+  <div class="vp" id="vp">
+    <div class="palette" id="palette">
+      <div class="pal-h"><span>ツール</span><button id="palMin" aria-label="パレットを折りたたむ" title="折りたたむ／広げる">‹</button></div>
+      <div class="pal-kind" id="kindSeg" role="group" aria-label="作業モード"><button data-k="occ" title="座席・スペースをプロットする"><i class="kd c"></i><span>スペース</span></button><button data-k="stor" title="収納什器をプロットする"><i class="kd q"></i><span>収納量</span></button></div>
+      <div class="pal-mode"><button id="mAdd" aria-pressed="true" title="図面をクリックしてプロットを追加 (A)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg><span>追加</span></button><button id="mSel" aria-pressed="false" title="プロットの選択・移動のみ (V)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l14 7-6.2 1.8L11 18z"/><path d="M13 13l5 5"/></svg><span>選択・移動</span></button></div>
+      <button id="mAuto" aria-pressed="false" title="見本を1つ囲むと、図面から似たものを探して候補を並べます (F)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/><path d="M8 10.5h5M10.5 8v5"/></svg><span>見本から自動で探す</span></button>
+      <button id="bUndo" class="pal-edit" title="ひとつ前の状態に戻します (Ctrl+Z)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></svg><span>取り消し</span><kbd>Ctrl+Z</kbd></button>
+      <div class="pal-h2" id="palTypeH">追加するタイプ</div>
+      <div class="pal-list" id="typeChips"></div>
+      <div class="pal-sum" id="palSum" title="表示中のフロアの合計"></div>
+      <div class="pal-h2">表示</div>
+      <div class="pal-view" id="viewSeg" role="group" aria-label="表示フィルタ"><button data-v="all" title="両方のプロットを表示">すべて</button><button data-v="occ" title="スペースのプロットだけ表示">スペース</button><button data-v="stor" title="収納量のプロットだけ表示">収納量</button></div>
+      <div class="pal-sep"></div>
+      <button id="bOpts" class="pal-edit" title="スペースタイプと部署の選択肢を追加・変更します"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3H9a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z"/></svg><span>選択肢を編集</span></button>
+    </div>
+    <div class="marquee" id="marquee" hidden></div>
+    <div class="stage" id="stage"><img id="img" alt="図面"><div id="guides"></div><div id="marks"></div><div id="autoLayer"></div><div class="mk ghost" id="ghost" hidden><b></b></div></div>
+    <div class="empty" id="empty" hidden>
+      <div><p>図面（PNG / JPG）をアップロードしてください。</p><label class="btn primary" id="lAddImg2" for="fImg" title="PNG・JPGの図面を読み込み、新しいフロアを作ります"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="14" height="14" rx="2"/><circle cx="8" cy="9" r="1.6"/><path d="M17 14l-4-4-8 8"/><path d="M20 15v6M17 18h6"/></svg>図面を追加</label></div>
+    </div>
+    <div class="hint" id="hint"></div>
+    <div class="vp-busy" id="busy" hidden><div>探しています…</div></div>
+    <div class="zoom" id="zoomBar">
+      <button id="zOut" title="縮小" aria-label="縮小"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+      <button id="zPct" class="pct" title="クリックで100%に戻す">100%</button>
+      <button id="zIn" title="拡大" aria-label="拡大"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg></button>
+      <button id="zFit" title="図面全体を表示" aria-label="全体表示"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></button>
+      <button id="zRot" title="図面を右に90°回転（プロットも一緒に回ります）" aria-label="図面を回転"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 11-2.3-5.7"/><path d="M20 4v5h-5"/></svg></button>
+    </div>
+  </div>
+  </div>
+
+  <aside>
+    <section id="secAuto" hidden></section>
+    <section id="secEdit">
+      <h2>選択中のプロット</h2>
+      <div id="editEmpty" class="muted">プロットをクリックすると、番号・タイプ・名称を編集できます。ドラッグで位置を移動できます。</div>
+      <div id="bulkBody" hidden style="display:flex;flex-direction:column;gap:10px">
+        <div class="edit-head"><span class="badge" id="kCount" style="--c:var(--accent)">0</span><span style="flex:1">件を選択中</span><button id="kClear">選択を解除</button></div>
+        <div class="muted sm" id="kBreak"></div>
+        <div class="muted sm">入力・選択した項目だけを、選択中のプロットにまとめて反映します。</div>
+        <div class="row"><span>タイプ</span><select id="kType"></select></div>
+        <div class="row"><span>名称</span><input type="text" id="kName" placeholder="変更しない"></div>
+        <div class="row"><span>部署名</span><select id="kDept"></select></div>
+        <div class="row" data-kind="occ"><span>席数</span><input type="number" id="kCap" min="1" step="1" placeholder="変更しない"></div>
+        <div class="row" data-kind="occ"><span>WP</span><input type="number" id="kWp" min="0" step="1" placeholder="変更しない"></div>
+        <div class="row" data-kind="stor"><span>段数</span><input type="number" id="kLev" min="1" step="1" placeholder="変更しない"></div>
+        <div class="row" data-kind="stor"><span>幅(m)</span><input type="number" id="kWid" min="0" step="0.1" placeholder="変更しない"></div>
+        <div class="row"><span>メモ</span><input type="text" id="kMemo" placeholder="変更しない"></div>
+        <div class="flex"><button class="primary" id="kApply">まとめて変更</button><button id="kRot" title="選択中のプロットの図形・数字を90°回します">まとめて90°回転</button><button class="danger" id="kDel">選択したプロットを削除</button></div>
+      </div>
+      <div id="editBody" hidden style="display:flex;flex-direction:column;gap:10px">
+        <div class="edit-head"><span class="badge" id="eBadge">1</span><span id="eTypeLbl"></span><span class="enav"><button id="ePrev" title="前の番号へ" aria-label="前の番号へ"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><button id="eNext" title="次の番号へ" aria-label="次の番号へ"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></span></div>
+        <div class="row"><span>番号</span><input type="number" id="eNo" min="0" step="1"></div>
+        <div class="row"><span>種類別</span><span><b id="eSeq" class="fmv"></b><span class="muted sm">　通し番号の順に自動</span></span></div>
+        <div id="eDup" class="warn" hidden>同じフロアに同じ番号があります（番号を書き換えると解消できます）</div>
+        <div class="row"><span>タイプ<b class="req">*</b></span><select id="eType"></select></div>
+        <div class="row"><span>名称</span><input type="text" id="eName" placeholder="例：会議室A、島3"></div>
+        <div class="row"><span>部署名</span><select id="eDept"></select></div>
+        <div class="row" data-kind="occ"><span>席数<b class="req">*</b></span><input type="number" id="eCap" min="1" step="1" placeholder="席数・人数（必須）"></div>
+        <div id="eCapWarn" class="warn" hidden>席数を入力してください（数量の集計に必要です）</div>
+        <div class="row" data-kind="occ"><span>WP<b class="req">*</b></span><input type="number" id="eWp" min="0" step="1" placeholder="ワークポイント数（必須）" title="ワークポイント（WP）の数。タイプの既定値（会議室・Webブースは0）か、席数1なら1が自動で入ります"></div>
+        <div id="eWpWarn" class="warn" hidden>WP（ワークポイント）を入力してください</div>
+        <div class="row" data-kind="stor"><span>段数<b class="req">*</b></span><input type="number" id="eLev" min="1" step="1" placeholder="段数（必須）"></div>
+        <div class="row" data-kind="stor"><span>幅(m)<b class="req">*</b></span><input type="number" id="eWid" min="0" step="0.1" placeholder="例：0.9"></div>
+        <div class="row" data-kind="stor"><span>収納量</span><b id="eFm" class="fmv">–</b></div>
+        <div id="eDimWarn" class="warn" hidden>段数と幅を入力してください（収納量の計算に必要です）</div>
+        <div class="row"><span>メモ</span><textarea id="eMemo" placeholder="備考"></textarea></div>
+        <div class="flex"><button id="eRot" title="図形・数字の向きを90°回します">向きを90°回転</button><button class="danger" id="eDel">このプロットを削除</button></div>
+      </div>
+    </section>
+
+
+    <div class="missbox" id="missBox" hidden></div>
+  </aside>
+</main>
+</div>
+
+<script>
+/* 調査票Excel生成（外部ライブラリなし：OOXMLを直接組み立ててZIP化） */
+const SurveyXlsx=(()=>{
+const enc=new TextEncoder();
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC[(c^b[i])&255]^(c>>>8);return(c^0xFFFFFFFF)>>>0}
+async function deflate(u8){
+  if(typeof CompressionStream==='undefined')return null;
+  try{const cs=new CompressionStream('deflate-raw');const w=cs.writable.getWriter();w.write(u8);w.close();
+    return new Uint8Array(await new Response(cs.readable).arrayBuffer())}catch(e){return null}}
+async function zip(files){
+  const parts=[],cen=[];let off=0;
+  for(const f of files){
+    const nm=enc.encode(f.name),raw=enc.encode(f.data),crc=crc32(raw);
+    const z=await deflate(raw),method=z?8:0,d=z||raw;
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(8,method,true);
+    h.setUint16(10,0,true);h.setUint16(12,0x21,true);h.setUint32(14,crc,true);h.setUint32(18,d.length,true);
+    h.setUint32(22,raw.length,true);h.setUint16(26,nm.length,true);h.setUint16(28,0,true);
+    parts.push(new Uint8Array(h.buffer),nm,d);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);
+    c.setUint16(10,method,true);c.setUint16(12,0,true);c.setUint16(14,0x21,true);c.setUint32(16,crc,true);
+    c.setUint32(20,d.length,true);c.setUint32(24,raw.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    cen.push(new Uint8Array(c.buffer),nm);
+    off+=30+nm.length+d.length;
+  }
+  const cs=cen.reduce((s,a)=>s+a.length,0);
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cs,true);e.setUint32(16,off,true);
+  const all=[...parts,...cen,new Uint8Array(e.buffer)],out=new Uint8Array(all.reduce((s,a)=>s+a.length,0));
+  let p=0;for(const a of all){out.set(a,p);p+=a.length}return out;
+}
+const x=s=>String(s??'').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const L=i=>{let s='';i++;while(i){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=(i-1-m)/26}return s};
+function cell(r,c,v,s){const ref=L(c)+r,st=s?` s="${s}"`:'';
+  if(v===null||v===undefined||v==='')return`<c r="${ref}"${st}/>`;
+  if(typeof v==='number')return`<c r="${ref}"${st}><v>${v}</v></c>`;
+  return`<c r="${ref}"${st} t="inlineStr"><is><t xml:space="preserve">${x(v)}</t></is></c>`}
+const row=(r,cells,ht)=>`<row r="${r}"${ht?` ht="${ht}" customHeight="1"`:''}>${cells.join('')}</row>`;
+
+/* スタイル番号 */
+const ST={head:1,text:2,date:3,time:4,input:5,na:6,num:7,title:8,label:9,inputNum:10,inputText:11,wrap:12,fm:13,fmSum:14};
+const FONT='<name val="游ゴシック"/><family val="3"/><charset val="128"/>';
+const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="3"><numFmt numFmtId="164" formatCode="yyyy/m/d(aaa)"/><numFmt numFmtId="165" formatCode="h:mm"/><numFmt numFmtId="166" formatCode="0.0"/></numFmts>
+<fonts count="4"><font><sz val="10"/>${FONT}</font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/>${FONT}</font><font><b/><sz val="14"/>${FONT}</font><font><b/><sz val="10"/>${FONT}</font></fonts>
+<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF1F5F8B"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFF6D5"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFE5E7EB"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>
+<border><left style="thin"><color rgb="FFBFC8C5"/></left><right style="thin"><color rgb="FFBFC8C5"/></right><top style="thin"><color rgb="FFBFC8C5"/></top><bottom style="thin"><color rgb="FFBFC8C5"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="15">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="top"/></xf>
+<xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf>
+<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="166" fontId="3" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="標準" xfId="0" builtinId="0"/></cellStyles>
+<dxfs count="2"><dxf><font><color rgb="FF9CA3AF"/></font><fill><patternFill patternType="solid"><bgColor rgb="FFE5E7EB"/></patternFill></fill></dxf>
+<dxf><fill><patternFill patternType="solid"><bgColor rgb="FFFDE2E1"/></patternFill></fill></dxf></dxfs>
+</styleSheet>`;
+
+const STATUS=['1.使用','2.離席','3.空席','4.観察不可'];
+const MULTI=['オープンmtg','社内会議室','来客会議室','カフェ/ラウンジ'];
+const serialDate=s=>{const[y,m,d]=s.split('-').map(Number);return Date.UTC(y,m-1,d)/864e5+25569};
+const hm=t=>{const h=Math.floor(t/60),m=t%60;return`${h}:${String(m).padStart(2,'0')}`};
+
+/* opts: {points:[{floor,no,type,name,cap,dept,memo}], dates:['2026-10-05',...], times:[540,600,...], periodLabel, created} */
+async function build(o){
+  const H=['フロア','番号','タイプ','名称','席数','部署名','メモ','調査日','調査時間','番号','在席状況','人数','備考'];
+  const W=[10,7,14,16,7,16,18,14,9,7,13,8,30];
+  const V=o.values||null;if(V){H.push('調査員');W.push(12)}
+  const LC=V?'N':'M';
+  const rows=[row(1,H.map((h,i)=>cell(1,i,h,ST.head)),22)];
+  let r=1;
+  for(const d of o.dates){const ds=serialDate(d);
+    for(const t of o.times){const ts=t/1440;
+      for(const p of o.points){r++;
+        const multi=(+p.cap||0)>1||(o.multi||MULTI).includes(p.type);
+        const cap=p.cap===''||p.cap==null?'':+p.cap;
+        rows.push(row(r,[cell(r,0,p.floor,ST.text),cell(r,1,isFinite(+p.no)?+p.no:p.no,ST.num),cell(r,2,p.type,ST.text),
+          cell(r,3,p.name,ST.text),cell(r,4,cap,ST.num),cell(r,5,p.dept,ST.text),cell(r,6,p.memo,ST.text),
+          cell(r,7,ds,ST.date),cell(r,8,ts,ST.time),cell(r,9,isFinite(+p.no)?+p.no:p.no,ST.num),
+          ...(()=>{const v=V&&V[`${d}|${t}|${p.id}`]||{};const c=[cell(r,10,v.status||'',ST.input),
+          cell(r,11,v.count===''||v.count==null?'':+v.count,multi?ST.inputNum:ST.na),cell(r,12,v.note||'',ST.inputText)];
+          if(V)c.push(cell(r,13,v.status?v.surveyor:'',ST.text));return c})()]));
+      }}}
+  const last=Math.max(r,2);
+  const sheet1=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${LC}${last}"/>
+<sheetViews><sheetView workbookViewId="0" tabSelected="1"><pane xSplit="2" ySplit="1" topLeftCell="C2" activePane="bottomRight" state="frozen"/><selection pane="bottomRight" activeCell="K2" sqref="K2"/></sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="18"/>
+<cols>${W.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>
+<sheetData>${rows.join('')}</sheetData>
+<autoFilter ref="A1:${LC}${last}"/>
+<conditionalFormatting sqref="L2:L${last}"><cfRule type="expression" dxfId="0" priority="1"><formula>AND($K2&lt;&gt;"",$K2&lt;&gt;"${STATUS[0]}")</formula></cfRule></conditionalFormatting>
+<dataValidations count="2">
+<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" errorTitle="在席状況" error="一覧から選んでください" sqref="K2:K${last}"><formula1>"${STATUS.join(',')}"</formula1></dataValidation>
+<dataValidation type="whole" operator="greaterThanOrEqual" allowBlank="1" showInputMessage="1" showErrorMessage="1" errorTitle="人数" error="0以上の整数を入力してください" promptTitle="人数" prompt="複数席のスペースを使用中の人数" sqref="L2:L${last}"><formula1>0</formula1></dataValidation>
+</dataValidations>
+<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>
+<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>
+<headerFooter><oddFooter>&amp;L© 合同会社mokume　無断複製・再配布禁止&amp;R&amp;P/&amp;N</oddFooter></headerFooter>
+</worksheet>`;
+
+  const floors=[...new Set(o.points.map(p=>p.floor))].join('、');
+  const info=[
+    ['稼働率調査 調査票'],[],
+    ...(V?[['集計状況',`回答 ${Object.values(V).filter(v=>v.status).length} 件を記入済み（${o.created} 取り込み）`]]:[]),
+    ['対象フロア',floors],['調査期間',o.periodLabel],['調査日数',o.dates.length+' 日'],
+    ['調査時刻',o.times.map(hm).join('、')+`（${o.times.length} 回／日）`],
+    ['対象プロット数',o.points.length+' 箇所'],['調査票の行数',(r-1)+' 行'],['番号の列','左端と調査時間の右に同じ番号を載せています（印刷時に記入欄の行を追いやすくするため）'],['作成日',o.created],[],
+    ['記入のしかた'],
+    ['在席状況','1.使用：人がいて使っている／2.離席：人はいないが私物・PCなどがあり使用中とみなせる／3.空席：人も私物もない／4.観察不可：施錠などで確認できない'],
+    ['人数','会議室・オープンmtg・ラウンジなど複数人で使うスペースで、「1.使用」のときに人数を入れる（グレーの欄は記入不要）'],
+    ['備考','気づいたことを自由に記入'],[],
+    ['© 合同会社mokume　無断複製・再配布禁止'],
+  ];
+  const r2=info.map((v,i)=>{const n=i+1;
+    if(i===0)return row(n,[cell(n,0,v[0],ST.title)],24);
+    if(!v.length)return row(n,[]);
+    if(v.length===1)return row(n,[cell(n,0,v[0],ST.label)]);
+    return row(n,[cell(n,0,v[0],ST.label),cell(n,1,v[1],ST.wrap)])});
+  const sheet2=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="18"/>
+<cols><col min="1" max="1" width="16" customWidth="1"/><col min="2" max="2" width="90" customWidth="1"/></cols>
+<sheetData>${r2.join('')}</sheetData>
+<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>
+</worksheet>`;
+
+  const files=[
+    {name:'[Content_Types].xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`},
+    {name:'_rels/.rels',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {name:'xl/workbook.xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="調査票" sheetId="1" r:id="rId1"/><sheet name="調査条件" sheetId="2" r:id="rId2"/></sheets><definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">調査票!$A$1:$${LC}$${last}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="0">調査票!$1:$1</definedName></definedNames></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/styles.xml',data:styles},
+    {name:'xl/worksheets/sheet1.xml',data:sheet1},
+    {name:'xl/worksheets/sheet2.xml',data:sheet2},
+  ];
+  return{bytes:await zip(files),rows:r-1};
+}
+return{build,hm,zip,cell,row,x,ST,styles};
+})();
+</script>
+<script id="matcherSrc">
+/* 見本による検出（自前実装・外部ライブラリなし）
+   見本の画像と似ている箇所を、正規化相互相関で探す。回転4方向×左右反転の8通りを調べる。
+   Matcher.detect(gray, W, H, box, opt) … gray: 明るさ(0〜1)の配列、box: 見本の範囲(px)、opt.area: 探す範囲、opt.floor: 残す最低の一致度
+   → { face: 見本の前の向き(0右/1下/2左/3上/-1不明), cands: [{x,y(中心px), o(向き0〜7), rot, score, w,h}] } */
+const Matcher = (() => {
+function detect(gray, W, H, box, opt = {}) {
+  const floor = opt.floor ?? 0.4;
+  const face = facing(gray, W, H, box);
+  const bx = Math.max(0, Math.round(box.x)), by = Math.max(0, Math.round(box.y));
+  const bw = Math.max(3, Math.min(W - bx, Math.round(box.w))), bh = Math.max(3, Math.min(H - by, Math.round(box.h)));
+  const area = opt.area ? clipRect(opt.area, W, H) : { x: 0, y: 0, w: W, h: H };
+  // 0-3: 時計回りに回転、4-7: 左右反転してから回転（CADの反転配置に対応）
+  const ORI = [0, 1, 2, 3, 4, 5, 6, 7];
+  // 少しぼかして、文字や線の細かなずれに左右されにくくする（見本が大きいほど強く）
+  const passes = Math.max(1, Math.min(3, Math.round(Math.min(bw, bh) / 8)));
+  for (let i = 0; i < passes; i++) gray = blur3(gray, W, H);
+  const full = level(gray, W, H, 1);
+  const tFull = ORI.map(o => orient(cut(gray, W, bx, by, bw, bh), bw, bh, o));
+  // 1段目：整数分の1に縮小して全体を粗く探す（見本の短辺が8px程度になる倍率）
+  const k = Math.max(1, Math.floor(Math.min(bw, bh) / 8));
+  let seeds;
+  if (k === 1) {
+    seeds = scan(full, tFull, area, floor);
+  } else {
+    const sm = shrinkInt(gray, W, H, k), Ws = Math.floor(W / k), Hs = Math.floor(H / k);
+    const lv = level(sm, Ws, Hs);
+    const tw = Math.floor(bw / k), th = Math.floor(bh / k);
+    const tS = ORI.map(o => orient(cut(sm, Ws, Math.floor(bx / k), Math.floor(by / k), tw, th), tw, th, o));
+    const ar = { x: Math.floor(area.x / k), y: Math.floor(area.y / k), w: Math.ceil(area.w / k), h: Math.ceil(area.h / k) };
+    const coarse = scan(lv, tS, ar, Math.max(0.25, floor - 0.15));
+    // 2段目：粗い候補の周りだけ元の解像度で確かめる
+    seeds = [];
+    for (const c of coarse) {
+      const cx = c.x * k, cy = c.y * k;
+      let bestP = null;
+      {
+        const o = c.o, t = tFull[o], r = k;
+        const x0 = Math.round(cx - t.w / 2) - r, y0 = Math.round(cy - t.h / 2) - r;
+        for (let y = y0; y <= y0 + 2 * r; y++) for (let x = x0; x <= x0 + 2 * r; x++) {
+          if (x < area.x || y < area.y || x + t.w > area.x + area.w || y + t.h > area.y + area.h) continue;
+          const sc = ncc(full, t, x, y);
+          if (!bestP || sc > bestP.score) bestP = { x: x + t.w / 2, y: y + t.h / 2, o, score: sc };
+        }
+      }
+      if (bestP && bestP.score >= floor) seeds.push(bestP);
+    }
+  }
+  // 重なりを除く（スコアの高い順に採用）
+  seeds.sort((a, b) => b.score - a.score);
+  const rad = 0.6 * Math.min(bw, bh), out = [];
+  for (const p of seeds) {
+    if (out.some(q => (q.x - p.x) ** 2 + (q.y - p.y) ** 2 < rad * rad)) continue;
+    out.push(p);
+  }
+  return { face, cands: out.map(p => ({ x: p.x, y: p.y, o: p.o, rot: (p.o & 3) * 90, score: p.score, w: p.o % 2 ? bh : bw, h: p.o % 2 ? bw : bh })) };
+}
+// 見本の「前」（机のある側）を推定する。箱の縁に沿って、箱より長くのびる線がある向き
+// 戻り値 0:右 1:下 2:左 3:上、はっきりしないときは -1
+function facing(gray, W, H, box) {
+  const x0 = Math.round(box.x), y0 = Math.round(box.y), x1 = Math.round(box.x + box.w), y1 = Math.round(box.y + box.h);
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  const dark = (x, y) => { x = Math.round(x); y = Math.round(y); return x < 0 || y < 0 || x >= W || y >= H ? 0 : 1 - gray[y * W + x]; };
+  const sc = [];
+  for (let d = 0; d < 4; d++) {
+    const vert = d % 2 === 0, len = vert ? box.h : box.w, inn = Math.max(2, Math.round((vert ? box.w : box.h) * 0.3));
+    // 縁から j だけ外（負なら内側）の線の濃さ
+    const line = j => { let s = 0, n = 0;
+      for (let t = -len; t <= len; t++) {
+        const x = d === 0 ? x1 + j : d === 2 ? x0 - 1 - j : cx + t, y = d === 1 ? y1 + j : d === 3 ? y0 - 1 - j : cy + t;
+        s += dark(x, y); n++;
+      }
+      return s / n; };
+    let best = 0;
+    for (let j = -inn; j <= 4; j++) best = Math.max(best, line(j) - (line(j - 3) + line(j + 3)) / 2);
+    sc.push(best);
+  }
+  const ord = [...sc].sort((a, b) => b - a);
+  return ord[0] < 0.08 || ord[0] - ord[1] < 0.04 ? -1 : sc.indexOf(ord[0]);
+}
+function clipRect(a, W, H) {
+  const x = Math.max(0, Math.floor(a.x)), y = Math.max(0, Math.floor(a.y));
+  return { x, y, w: Math.min(W, Math.ceil(a.x + a.w)) - x, h: Math.min(H, Math.ceil(a.y + a.h)) - y };
+}
+// 画像と積分画像（窓内の和・二乗和）をまとめる
+function level(g, W, H) {
+  const I1 = new Float64Array((W + 1) * (H + 1)), I2 = new Float64Array((W + 1) * (H + 1));
+  for (let y = 0; y < H; y++) {
+    let a = 0, b = 0;
+    for (let x = 0; x < W; x++) {
+      const v = g[y * W + x]; a += v; b += v * v;
+      I1[(y + 1) * (W + 1) + x + 1] = I1[y * (W + 1) + x + 1] + a;
+      I2[(y + 1) * (W + 1) + x + 1] = I2[y * (W + 1) + x + 1] + b;
+    }
+  }
+  return { g, W, H, I1, I2 };
+}
+function cut(g, W, x0, y0, w, h) {
+  const T = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) T[y * w + x] = g[(y0 + y) * W + x0 + x];
+  return T;
+}
+// 向きを変えた見本（平均を引いて正規化済み）
+function orient(T, w, h, o) {
+  let A = T, aw = w, ah = h;
+  if (o > 3) { const B = new Float32Array(w * h); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) B[y * w + (w - 1 - x)] = T[y * w + x]; A = B; }
+  for (let k = 0; k < (o & 3); k++) {
+    const B = new Float32Array(aw * ah), bw = ah, bh = aw;
+    for (let y = 0; y < ah; y++) for (let x = 0; x < aw; x++) B[x * bw + (bw - 1 - y)] = A[y * aw + x];
+    A = B; aw = bw; ah = bh;
+  }
+  const R = Float32Array.from(A), n = aw * ah;
+  let m = 0; for (const v of R) m += v; m /= n;
+  let tn = 0; for (let i = 0; i < n; i++) { R[i] -= m; tn += R[i] * R[i]; }
+  return { d: R, w: aw, h: ah, n, norm: Math.sqrt(tn) };
+}
+// 左上(x,y)に見本を重ねたときの一致度（-1〜1）
+function ncc(L, t, x, y) {
+  if (t.norm < 1e-6) return 0;
+  const { g, W, I1, I2 } = L, W1 = W + 1;
+  const a = I1[(y + t.h) * W1 + x + t.w] - I1[y * W1 + x + t.w] - I1[(y + t.h) * W1 + x] + I1[y * W1 + x];
+  const b = I2[(y + t.h) * W1 + x + t.w] - I2[y * W1 + x + t.w] - I2[(y + t.h) * W1 + x] + I2[y * W1 + x];
+  const v = b - a * a / t.n; if (v < 1e-6) return 0;
+  let num = 0;
+  for (let j = 0; j < t.h; j++) { const o = (y + j) * W + x, q = j * t.w; for (let i = 0; i < t.w; i++) num += g[o + i] * t.d[q + i]; }
+  return num / (Math.sqrt(v) * t.norm);
+}
+// 全面を調べて、山の頂上（周囲より高い点）を返す
+function scan(L, ts, ar, floor) {
+  const { W, H } = L, best = new Float32Array(W * H).fill(-1), bo = new Uint8Array(W * H);
+  ts.forEach((t, o) => {
+    for (let y = ar.y; y + t.h <= Math.min(H, ar.y + ar.h); y++) for (let x = ar.x; x + t.w <= Math.min(W, ar.x + ar.w); x++) {
+      const sc = ncc(L, t, x, y), c = (y + (t.h >> 1)) * W + x + (t.w >> 1);
+      if (sc > best[c]) { best[c] = sc; bo[c] = o; }
+    }
+  });
+  const peaks = [];
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const v = best[y * W + x]; if (v < floor) continue;
+    let ok = true;
+    for (let j = -1; j <= 1 && ok; j++) for (let i = -1; i <= 1; i++) if ((i || j) && best[(y + j) * W + x + i] > v) { ok = false; break; }
+    if (ok) { const t = ts[bo[y * W + x]]; peaks.push({ x: x - (t.w >> 1) + t.w / 2, y: y - (t.h >> 1) + t.h / 2, o: bo[y * W + x], score: v }); }
+  }
+  return peaks;
+}
+function blur3(g, W, H) {
+  const o = new Float32Array(g.length);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let a = 0, n = 0;
+    for (let j = -1; j <= 1; j++) { const Y = y + j; if (Y < 0 || Y >= H) continue; for (let i = -1; i <= 1; i++) { const X = x + i; if (X < 0 || X >= W) continue; a += g[Y * W + X]; n++; } }
+    o[y * W + x] = a / n;
+  }
+  return o;
+}
+function shrinkInt(g, W, H, k) {
+  const Ws = Math.floor(W / k), Hs = Math.floor(H / k), out = new Float32Array(Ws * Hs);
+  for (let y = 0; y < Hs; y++) for (let x = 0; x < Ws; x++) {
+    let a = 0; for (let j = 0; j < k; j++) for (let i = 0; i < k; i++) a += g[(y * k + j) * W + x * k + i];
+    out[y * Ws + x] = a / (k * k);
+  }
+  return out;
+}
+  return { detect, facing };
+})();
+if (typeof module !== 'undefined') module.exports = Matcher;
+</script>
+<script>
+(()=>{
+const DEFAULT_TYPES=[
+ {k:'一般席',code:'A',c:'#3b6fb6',kind:'occ',multi:false,def1:true},{k:'集中席',code:'B',c:'#6a4fb0',kind:'occ',multi:false,def1:true},{k:'オープンmtg',code:'C',c:'#23897a',kind:'occ',multi:true,def1:false},
+ {k:'Webブース',wpDef:0,code:'D',c:'#c2410c',kind:'occ',multi:false,def1:false},{k:'社内会議室',wpDef:0,code:'E',c:'#b4335a',kind:'occ',multi:true,def1:false},{k:'来客会議室',wpDef:0,code:'F',c:'#86691a',kind:'occ',multi:true,def1:false},
+ {k:'カフェ/ラウンジ',code:'G',c:'#4d8a35',kind:'occ',multi:true,def1:false},{k:'その他',code:'X',c:'#6b7280',kind:'occ',multi:false,def1:false},
+ {k:'ローキャビ',code:'L',c:'#185FA5',kind:'stor',levels:3,width:0.9},{k:'ハイキャビ',code:'H',c:'#A32D2D',kind:'stor',levels:6,width:0.9},{k:'その他什器',code:'T',c:'#BA7517',kind:'stor',levels:'',width:''}];
+const PALETTE=['#3b6fb6','#6a4fb0','#23897a','#c2410c','#b4335a','#86691a','#4d8a35','#6b7280','#0f766e','#9333ea','#be123c','#2563eb','#a16207','#475569'];
+/* 種類別番号：フロア内・タイプ内で、通し番号の順に 1,2,3… を振る（保存せず、その都度計算） */
+const codeOf=t=>{const x=tOf(t);return(x&&x.code)||'?'};
+function seqMap(f){const m=new Map(),c={};for(const p of[...f.points].sort((a,b)=>(+a.no||0)-(+b.no||0))){const k=kindOf(p)+'|'+p.type;c[k]=(c[k]||0)+1;m.set(p.id,c[k])}return m}
+const typeLabel=(p,m)=>`${codeOf(p.type)}-${m.get(p.id)||'?'}`;
+const shownLabel=(p,m)=>S.numMode==='type'?typeLabel(p,m):String(p.no);
+const nextTypeLabel=f=>`${codeOf(S.type)}-${f.points.filter(p=>kindOf(p)===S.kind&&p.type===S.type).length+1}`;
+const KIND_LABEL={occ:'スペース',stor:'収納量'};
+const tOf=k=>(S.types||[]).find(x=>x.k===k);
+const tKind=t=>(t&&t.kind)||'occ';
+const kindOf=p=>p.kind==='stor'?'stor':'occ';
+const typesOf=kd=>S.types.filter(t=>tKind(t)===kd);
+const isDef1=k=>!!(tOf(k)||{}).def1;
+const defCap=t=>isDef1(t)?1:'';
+const noCap=p=>kindOf(p)==='occ'&&(p.cap===''||p.cap==null||!(+p.cap>=1));
+const noDim=p=>kindOf(p)==='stor'&&!(+p.levels>=1&&+p.width>0);
+const noWp=p=>kindOf(p)==='occ'&&(p.wp===''||p.wp==null||!(+p.wp>=0));
+/* 席数1のときは、WPが空なら1を入れる */
+/* WPの自動入力：タイプにWPの既定値があればそれを、なければ席数1のとき1を入れる（空欄のときだけ。force=true はタイプ変更時） */
+const wpDefOf=k=>{const t=tOf(k);return t&&t.wpDef!==''&&t.wpDef!=null&&isFinite(+t.wpDef)?+t.wpDef:null};
+const autoWp=(p,force)=>{if(kindOf(p)!=='occ')return p;const d=wpDefOf(p.type);
+  if(force){p.wp=d!==null?d:(+p.cap===1?1:'');return p}
+  if(p.wp===''||p.wp==null){if(d!==null)p.wp=d;else if(+p.cap===1)p.wp=1}return p};
+const missing=p=>noCap(p)||noWp(p)||noDim(p);
+const fmOf=p=>kindOf(p)==='stor'&&+p.levels>0&&+p.width>0?Math.round(+p.levels*+p.width*100)/100:0;
+const fmt1=v=>(Math.round(v*10)/10).toFixed(1);
+const color=t=>(tOf(t)||{c:'#6b7280'}).c;
+const multiTypes=()=>S.types.filter(t=>tKind(t)==='occ'&&t.multi).map(t=>t.k);
+const visible=p=>S.view==='all'||kindOf(p)===S.view;
+const editable=p=>kindOf(p)===S.kind&&visible(p);
+/* タイプの既定値（段数・幅）をプロットに反映する。既定値のないタイプは手入力の値を残す */
+function applyTypeDims(p,force){const t=tOf(p.type);if(!t||tKind(t)!=='stor')return;
+  if(t.levels!==''&&t.levels!=null&&(force||!(+p.levels>=1)))p.levels=+t.levels;
+  if(t.width!==''&&t.width!=null&&(force||!(+p.width>0)))p.width=+t.width}
+const $=id=>document.getElementById(id);
+const uid=()=>Math.random().toString(36).slice(2,10);
+const KEY='space-counter-adv-v1';
+
+let S={floors:[],cur:0,type:'一般席',mode:'add',kind:'occ',view:'all',typeBy:{}};
+let sel=null, focusType=null, view={z:1,tx:0,ty:0}, undo=[];
+
+/* ---------- サンプル図面 ---------- */
+function sampleFloor(){
+  const W=1200,H=760,c=document.createElement('canvas');c.width=W;c.height=H;const g=c.getContext('2d');
+  g.fillStyle='#fbfbf9';g.fillRect(0,0,W,H);g.strokeStyle='#2b2b2b';g.lineWidth=6;g.strokeRect(30,30,W-60,H-60);
+  g.lineWidth=3;
+  const room=(x,y,w,h,t)=>{g.strokeRect(x,y,w,h);g.fillStyle='#8a8a8a';g.font='16px sans-serif';g.fillText(t,x+10,y+24)};
+  room(30,30,300,220,'会議室A');room(330,30,220,220,'会議室B');room(550,30,180,220,'応接');
+  room(900,30,270,300,'ラウンジ');
+  for(let i=0;i<3;i++){g.strokeRect(760,40+i*90,110,80)}
+  g.fillStyle='#8a8a8a';g.fillText('ブース',770,30+8+290);
+  g.lineWidth=1.5;g.strokeStyle='#666';
+  for(let r=0;r<3;r++)for(let c2=0;c2<2;c2++){const x=90+c2*360,y=330+r*130;
+    g.strokeRect(x,y,280,70);g.beginPath();g.moveTo(x,y+35);g.lineTo(x+280,y+35);for(let k=1;k<4;k++){g.moveTo(x+k*70,y);g.lineTo(x+k*70,y+70)}g.stroke()}
+  /* 島の端と壁際の収納 */
+  g.fillStyle='#e9e6dc';
+  for(let r=0;r<3;r++)for(let c2=0;c2<2;c2++){const x=90+c2*360+280,y=330+r*130;g.fillRect(x+4,y+8,26,54);g.strokeRect(x+4,y+8,26,54)}
+  for(let i=0;i<4;i++){g.fillRect(430+i*105,690,95,32);g.strokeRect(430+i*105,690,95,32)}
+  g.strokeStyle='#2b2b2b';g.lineWidth=3;room(860,400,310,330,'集中エリア');
+  g.lineWidth=1.5;for(let i=0;i<4;i++)g.strokeRect(890,450+i*65,120,45);
+  g.fillStyle='#b8b8b8';g.font='14px sans-serif';g.fillText('サンプル図面（実際の図面をアップロードしてください）',40,H-40);
+  const f={id:uid(),name:'サンプル 3F',img:c.toDataURL('image/png'),w:W,h:H,points:[]};
+  let n=0,m=0;
+  const add=(x,y,t,nm,cap,dept)=>f.points.push({id:uid(),kind:'occ',no:++n,type:t,name:nm||'',dept:dept||'',cap:cap??'',wp:'',memo:'',x:x/W,y:y/H});
+  const addS=(x,y,t,lv,wd,rot,dept)=>f.points.push({id:uid(),kind:'stor',no:++m,type:t,name:'',dept:dept||'',levels:lv,width:wd,rot:rot||0,memo:'',x:x/W,y:y/H});
+  for(let r=0;r<3;r++)for(let c2=0;c2<2;c2++){const x=90+c2*360,y=330+r*130;for(let k=0;k<4;k++){const dp=c2===0?'営業部':'企画部';add(x+35+k*70,y+17,'一般席','','',dp);add(x+35+k*70,y+53,'一般席','','',dp)}}
+  for(let i=0;i<4;i++)add(950,472+i*65,'集中席');
+  for(let i=0;i<3;i++)add(815,80+i*90,'Webブース','',1);
+  add(180,150,'社内会議室','会議室A',8);add(440,150,'社内会議室','会議室B',6);add(640,150,'来客会議室','応接',4);
+  add(980,140,'カフェ/ラウンジ','ラウンジ',12);add(1090,240,'オープンmtg','',4);f.points.slice(-2).forEach(p=>p.wp=0);
+  for(let r=0;r<3;r++)for(let c2=0;c2<2;c2++)addS(90+c2*360+297,365+r*130,'ローキャビ',3,0.9,90,c2===0?'営業部':'企画部');
+  addS(477.5,706,'ハイキャビ',6,0.9,0,'総務部');addS(582.5,706,'ハイキャビ',6,0.9,0,'総務部');addS(687.5,706,'ローキャビ',3,0.9,0,'総務部');addS(792.5,706,'その他什器',5,1.2,0,'総務部');
+  return f;
+}
+
+/* ---------- 保存 ---------- */
+let saveT;
+function persist(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('ブラウザ保存の容量を超えました。「保存」で作業ファイルに保存してください')}},300)}
+function migrate(){
+  if(!Array.isArray(S.types)||!S.types.length)S.types=DEFAULT_TYPES.map(t=>({...t}));
+  for(const t of S.types)if(!t.kind)t.kind='occ';
+  {const used=new Set(S.types.map(t=>t.code).filter(Boolean));
+   for(const t of S.types)if(!t.code){const d=DEFAULT_TYPES.find(x=>x.k===t.k);let c=d&&!used.has(d.code)?d.code:null;
+     if(!c){for(const ch of'ABCDEFGHIJKMNOPQRSUVWYZ'){if(!used.has(ch)){c=ch;break}}if(!c){let i=1;while(used.has('Z'+i))i++;c='Z'+i}}t.code=c;used.add(c)}}
+  if(S.numMode!=='type')S.numMode='no';
+  for(const t of S.types)if(t.wpDef===undefined){const d=DEFAULT_TYPES.find(x=>x.k===t.k);t.wpDef=d&&d.wpDef!==undefined?d.wpDef:''}
+  if(!S.types.some(t=>t.kind==='stor'))for(const d of DEFAULT_TYPES.filter(d=>d.kind==='stor'))if(!tOf(d.k))S.types.push({...d});
+  if(!Array.isArray(S.depts))S.depts=[];
+  if(S.kind!=='stor')S.kind='occ';if(!['all','occ','stor'].includes(S.view))S.view='all';
+  if(!S.typeBy||typeof S.typeBy!=='object')S.typeBy={};
+  if(!['add','sel','auto'].includes(S.mode))S.mode='add';
+  S.auto=Object.assign({thr:80,order:'island'},S.auto&&typeof S.auto==='object'?S.auto:{});
+  if(!(S.auto.thr>=50&&S.auto.thr<=99))S.auto.thr=80;if(!['island','row','col'].includes(S.auto.order))S.auto.order='island';
+  if(!S.auto.rot||typeof S.auto.rot!=='object')S.auto.rot={occ:false,stor:true};
+  for(const f of S.floors)for(const p of f.points){
+    if(p.kind!=='stor')p.kind='occ';
+    if(!tOf(p.type)){const nm=p.type||(p.kind==='stor'?'その他什器':'その他');if(!tOf(nm))S.types.push({k:nm,c:PALETTE[S.types.length%PALETTE.length],kind:p.kind,multi:false,def1:false,levels:'',width:''});p.type=nm}
+    if(p.dept&&!S.depts.includes(p.dept))S.depts.push(p.dept);
+    if(p.kind==='occ'&&noCap(p)&&isDef1(p.type))p.cap=1;
+    if(p.kind==='occ'){if(p.wp===undefined)p.wp='';autoWp(p)}
+    if(p.kind==='stor')applyTypeDims(p,false);
+    if(![0,90,180,270].includes(+p.rot))p.rot=0}
+  const t=tOf(S.type);if(!t||tKind(t)!==S.kind)S.type=(tOf(S.typeBy[S.kind])&&tKind(tOf(S.typeBy[S.kind]))===S.kind)?S.typeBy[S.kind]:(typesOf(S.kind)[0]||S.types[0]).k;
+}
+function load(){try{const t=localStorage.getItem(KEY)||localStorage.getItem('as-is-v1')||localStorage.getItem('occ-plotter-v1');if(t){const o=JSON.parse(t);if(o&&o.floors&&o.floors.length){S=Object.assign(S,o);migrate();return}}}catch(e){}S.floors=[sampleFloor()];S.cur=0;migrate()}
+
+const F=()=>S.floors[S.cur];
+const nextNo=(f,kd)=>f.points.filter(p=>kindOf(p)===(kd||S.kind)).reduce((m,p)=>Math.max(m,+p.no||0),0)+1;
+/* 同じ種別の中で、消えた番号を詰める */
+function closeGaps(f,removed){
+  for(const kd of['occ','stor']){const left=new Set(f.points.filter(x=>kindOf(x)===kd).map(x=>+x.no));
+    const gone=[...new Set(removed.filter(x=>kindOf(x)===kd).map(x=>+x.no))].filter(n=>n&&!left.has(n)).sort((a,b)=>a-b);
+    if(!gone.length)continue;
+    f.points.forEach(x=>{if(kindOf(x)!==kd)return;const v=+x.no;let k=0;for(const g of gone)if(g<v)k++;if(k)x.no=v-k})}}
+function setKind(kd,silent){
+  if(kd===S.kind)return;S.typeBy[S.kind]=S.type;S.kind=kd;
+  const t=tOf(S.typeBy[kd]);S.type=t&&tKind(t)===kd?t.k:(typesOf(kd)[0]||{}).k;
+  if(S.view!=='all'&&S.view!==kd)S.view=kd;
+  sel=null;msel.clear();focusType=null;renderAll();persist();
+  if(!silent)toast(`${KIND_LABEL[kd]}モードにしました`)}
+function setView(v){S.view=v;if(v!=='all'&&v!==S.kind){S.typeBy[S.kind]=S.type;S.kind=v;const t=tOf(S.typeBy[v]);S.type=t&&tKind(t)===v?t.k:(typesOf(v)[0]||{}).k}
+  sel=null;msel.clear();renderAll();persist()}
+function snap(){const f=F();if(!f)return;undo.push({fi:S.cur,pts:JSON.stringify(f.points)});if(undo.length>60)undo.shift()}
+
+/* ---------- 描画 ---------- */
+const vp=$('vp'),stage=$('stage'),img=$('img'),marks=$('marks');
+function applyView(){stage.style.transform=`translate(${view.tx}px,${view.ty}px) scale(${view.z})`;stage.style.setProperty('--inv',1/view.z);const z=$('zPct');if(z)z.textContent=Math.round(view.z*100)+'%'}
+function fit(){const f=F();if(!f)return;const r=vp.getBoundingClientRect(),pw=$('palette').offsetWidth,L=r.width>700?pw+24:0,W=r.width-L;const z=Math.min(W/f.w,r.height/f.h)*0.94;view={z,tx:L+(W-f.w*z)/2,ty:(r.height-f.h*z)/2};applyView()}
+function zoomAt(fac,cx,cy){const z2=Math.min(8,Math.max(0.05,view.z*fac));const k=z2/view.z;view.tx=cx-(cx-view.tx)*k;view.ty=cy-(cy-view.ty)*k;view.z=z2;applyView()}
+
+let renaming=false;
+function renderTabs(){
+  if(renaming)return;
+  const t=$('tabs');t.innerHTML='';
+  S.floors.forEach((f,i)=>{const on=i===S.cur,b=document.createElement('div');b.className='tab';b.setAttribute('role','tab');b.setAttribute('aria-selected',on);b.tabIndex=0;
+    b.title=on?'クリックで名前を変更':'このフロアを表示';
+    b.innerHTML=`<span class="tname">${esc(f.name)}</span><span class="n" title="${S.view==='all'?'スペース／収納量':KIND_LABEL[S.view]}">${S.view==='all'?f.points.filter(p=>kindOf(p)==='occ').length+'／'+f.points.filter(p=>kindOf(p)==='stor').length:f.points.filter(visible).length}</span>`+(on?`<button class="tmenu" aria-label="フロアのメニュー" title="フロアのメニュー"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.3" class="f"/><circle cx="12" cy="12" r="1.3" class="f"/><circle cx="19" cy="12" r="1.3" class="f"/></svg></button>`:'');
+    b.onclick=e=>{if(e.target.closest('.tmenu')){floorMenu(e.target.closest('.tmenu'));return}
+      if(on)renameFloor(b);else{S.cur=i;sel=null;msel.clear();focusType=null;renderAll(true);persist()}};
+    b.onkeydown=e=>{if(e.key==='Enter'&&!e.target.closest('input'))b.click()};
+    t.appendChild(b)});
+  const add=document.createElement('label');add.className='tab add';add.htmlFor='fImg';add.title='PNG・JPGの図面を読み込み、新しいフロアを作ります';add.textContent='＋ 図面を追加';t.appendChild(add);
+}
+function renameFloor(b){
+  const f=F();if(!f)return;renaming=true;const nm=b.querySelector('.tname');
+  nm.innerHTML=`<input type="text" class="tin" value="${esc(f.name)}" aria-label="フロア名">`;const inp=nm.firstChild;inp.focus();inp.select();
+  const end=ok=>{if(!renaming)return;renaming=false;if(ok){const v=inp.value.trim();if(v)f.name=v;persist()}renderTabs()};
+  inp.onkeydown=e=>{if(e.key==='Enter')end(true);if(e.key==='Escape')end(false);e.stopPropagation()};
+  inp.onblur=()=>end(true);inp.onclick=e=>e.stopPropagation();
+}
+function floorMenu(btn){
+  document.querySelector('.fmenu')?.remove();
+  const r=btn.getBoundingClientRect(),m=document.createElement('div');m.className='fmenu';m.style.left=r.left+'px';m.style.top=(r.bottom+4)+'px';
+  m.innerHTML=`<button data-a="ren">名前を変更</button><button data-a="rep">図面を差し替え</button><button data-a="del" class="danger">このフロアを削除</button>
+    <div class="muted sm">PDFの図面は画像（PNG/JPG）に書き出してから読み込みます。</div>`;
+  document.body.appendChild(m);
+  const close=()=>{m.remove();removeEventListener('pointerdown',out,true)};const out=e=>{if(!m.contains(e.target))close()};
+  setTimeout(()=>addEventListener('pointerdown',out,true));
+  m.onclick=e=>{const b=e.target.closest('button');if(!b)return;
+    if(b.dataset.a==='ren'){close();renameFloor(document.querySelector('.tab[aria-selected="true"]'))}
+    if(b.dataset.a==='rep'){close();$('fReplace').click()}
+    if(b.dataset.a==='del'){if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='もう一度押すと削除（元に戻せません）';return}
+      close();S.floors.splice(S.cur,1);S.cur=Math.max(0,S.cur-1);sel=null;undo=[];renderAll(true);persist();toast('フロアを削除しました')}};
+}
+function renderMarks(){
+  const f=F();marks.innerHTML='';if(!f)return;
+  const cnt={};f.points.forEach(p=>{const k=kindOf(p)+p.no;cnt[k]=(cnt[k]||0)+1});
+  const sm=seqMap(f);
+  for(const p of f.points){if(!visible(p))continue;const kd=kindOf(p),ed=kd===S.kind;
+    const d=document.createElement('div');
+    d.className='mk'+(kd==='stor'?' sq':'')+(!ed?' other':'')+(p.id===sel||msel.has(p.id)?' on':'')+(ed&&cnt[kd+p.no]>1?' dup':'')+(ed&&missing(p)?' nocap':'')+(focusType&&p.type!==focusType?' dim':'');
+    d.style.left=p.x*f.w+'px';d.style.top=p.y*f.h+'px';d.style.setProperty('--c',color(p.type));d.style.setProperty('--rot',(+p.rot||0)+'deg');d.dataset.id=p.id;
+    const tip=`No.${p.no}／${typeLabel(p,sm)}　`+(kd==='stor'?`${p.type}${p.name?' / '+p.name:''}　${+p.levels||'?'}段×${+p.width||'?'}m＝${fmt1(fmOf(p))}fm`:`${p.type}${p.name?' / '+p.name:''}　席数${p.cap||'?'}・${p.wp===''||p.wp==null?'?':p.wp}WP`);
+    d.innerHTML=`<b title="${esc(tip)}">${esc(shownLabel(p,sm))}</b>`;marks.appendChild(d)}
+}
+function showKindRows(root,kd){root.querySelectorAll('[data-kind]').forEach(r=>r.hidden=r.dataset.kind!==kd)}
+function renderEdit(){
+  const f=F(),p=f&&f.points.find(x=>x.id===sel),bulk=msel.size>1;
+  $('bulkBody').hidden=!bulk;
+  if(bulk){$('editEmpty').hidden=$('editBody').hidden=true;$('kCount').textContent=msel.size;showKindRows($('bulkBody'),S.kind);
+    const ps=f.points.filter(x=>msel.has(x.id)),cnt={};ps.forEach(x=>cnt[x.type]=(cnt[x.type]||0)+1);
+    let br='内訳：'+Object.entries(cnt).map(([k,v])=>`${k} ${v}`).join('、');
+    if(S.kind==='stor')br+=`　収納量 計 ${fmt1(ps.reduce((s,x)=>s+fmOf(x),0))} fm`;
+    $('kBreak').textContent=br;
+    $('kDel').textContent=`選択した ${msel.size} 件を削除`;$('kDel').dataset.arm='';return}
+  $('editEmpty').hidden=!!p;$('editBody').hidden=!p;if(!p)return;
+  const kd=kindOf(p);showKindRows($('editBody'),kd);
+  const sm=seqMap(f);$('eBadge').textContent=shownLabel(p,sm);$('eSeq').textContent=typeLabel(p,sm);$('eBadge').style.setProperty('--c',color(p.type));$('eBadge').style.borderRadius=kd==='stor'?'6px':'';
+  $('eTypeLbl').textContent=p.type+(p.name?'・'+p.name:'');
+  if(document.activeElement!==$('eNo'))$('eNo').value=p.no;
+  $('eType').value=p.type;
+  if(p.dept&&!S.depts.includes(p.dept))renderOptions();
+  for(const[k,id]of[['name','eName'],['dept','eDept'],['cap','eCap'],['wp','eWp'],['memo','eMemo'],['levels','eLev'],['width','eWid']])if(document.activeElement!==$(id))$(id).value=p[k]??'';
+  $('eDup').hidden=f.points.filter(x=>kindOf(x)===kd&&String(x.no)===String(p.no)).length<2;
+  $('eCap').classList.toggle('miss',noCap(p));$('eCapWarn').hidden=!noCap(p);$('eWp').classList.toggle('miss',noWp(p));$('eWpWarn').hidden=!noWp(p);
+  $('eLev').classList.toggle('miss',noDim(p)&&!(+p.levels>=1));$('eWid').classList.toggle('miss',noDim(p)&&!(+p.width>0));$('eDimWarn').hidden=!noDim(p);
+  $('eFm').textContent=kd==='stor'?(noDim(p)?'–':`${fmt1(fmOf(p))} fm（${+p.levels}段 × ${+p.width}m）`):'';
+}
+/* パレットの集計：タイプごとの件数と、表示中のフロアの合計 */
+function renderPalStats(){
+  const ki=k=>{const i=typesOf(S.kind).findIndex(t=>t.k===k);return i>=0&&i<9?'／キー '+(i+1):''};
+  const f=F(),el=$('palSum');if(!el)return;
+  const ps=f?f.points:[],occ=ps.filter(p=>kindOf(p)==='occ'),st=ps.filter(p=>kindOf(p)==='stor');
+  const cap=a=>a.reduce((s,p)=>s+(+p.cap||0),0),wp=a=>a.reduce((s,p)=>s+(+p.wp||0),0),fm=a=>a.reduce((s,p)=>s+fmOf(p),0);
+  document.querySelectorAll('#typeChips .pt').forEach(c=>{const k=c.dataset.k,tp=ps.filter(p=>kindOf(p)===S.kind&&p.type===k),em=c.querySelector('em');if(!em)return;
+    em.textContent=tp.length;em.classList.toggle('z',!tp.length);
+    c.title=`${k}：`+(S.kind==='stor'?`${tp.length}台・${fmt1(fm(tp))}fm`:`${tp.length}箇所・席数${cap(tp)}・WP${wp(tp)}`)+`（記号 ${codeOf(k)}${ki(k)}）`});
+  if(!f){el.hidden=true;return}el.hidden=false;
+  el.innerHTML=S.kind==='stor'
+    ?`<span class="h">このフロアの合計</span><span>台数</span><b>${st.length}</b><span>収納量</span><b>${fmt1(fm(st))} fm</b><span class="o">スペース ${occ.length}箇所・席数${cap(occ)}・WP${wp(occ)}</span>`
+    :`<span class="h">このフロアの合計</span><span>箇所数</span><b>${occ.length}</b><span>席数</span><b>${cap(occ)}</b><span>WP</span><b>${wp(occ)}</b><span class="o">収納量 ${st.length}台・${fmt1(fm(st))} fm</span>`}
+/* タイプ単位でまとめて選ぶ（パレット・下の集計帯から） add=true でいまの選択に足す／外す */
+function selectType(k,add){
+  const f=F();if(!f)return;const ids=f.points.filter(p=>kindOf(p)===S.kind&&p.type===k).map(p=>p.id);
+  if(!ids.length){toast(`${k}のプロットはありません`);return}
+  if(!visible({kind:S.kind}))setView('all');
+  const cur=new Set(msel.size?msel:(sel?[sel]:[])),all=ids.every(id=>cur.has(id));focusType=null;
+  if(add){if(all)ids.forEach(id=>cur.delete(id));else ids.forEach(id=>cur.add(id));applySel(cur)}
+  else if(all&&cur.size===ids.length)applySel([]);
+  else applySel(ids);
+  const n=msel.size||(sel?1:0);if(n>1)toast(`${n} 件を選択中です。右の欄でまとめて変更できます`);
+}
+const fullySelectedTypes=()=>{const f=F();if(!f)return new Set();const cur=new Set(msel.size?msel:(sel?[sel]:[]));if(!cur.size)return new Set();
+  const out=new Set();for(const t of typesOf(S.kind)){const ids=f.points.filter(p=>kindOf(p)===S.kind&&p.type===t.k).map(p=>p.id);if(ids.length&&ids.every(id=>cur.has(id)))out.add(t.k)}return out};
+function renderStats(){renderPalStats();
+  const f=F(),el=$('missBox');if(!f){el.hidden=true;return}
+  const kd=S.kind,miss=f.points.filter(p=>kindOf(p)===kd&&missing(p)).sort((a,b)=>(+a.no||0)-(+b.no||0));
+  const other=f.points.filter(p=>kindOf(p)!==kd&&missing(p)).length;
+  if(!miss.length&&!other){el.hidden=true;el.innerHTML='';return}
+  el.hidden=false;
+  el.innerHTML=(miss.length?`<button id="missGo" title="クリックで、未入力の最初のプロットへ移動します"><span>⚠ ${kd==='stor'?'段数・幅':'席数・WP'}が未入力：${miss.length} 件</span><span>次へ ›</span></button>
+    <span class="sm">番号 ${miss.slice(0,12).map(p=>esc(p.no)).join('、')}${miss.length>12?' ほか':''}</span>`:'')
+    +(other?`<span class="sm">${KIND_LABEL[kd==='stor'?'occ':'stor']}にも未入力が ${other} 件あります（モードを切り替えて確認）</span>`:'');
+}
+$('missBox').addEventListener('click',e=>{if(!e.target.closest('#missGo'))return;const f=F();if(!f)return;
+  const list=f.points.filter(p=>kindOf(p)===S.kind&&missing(p)).sort((a,b)=>(+a.no||0)-(+b.no||0));if(!list.length)return;
+  const cur=f.points.find(p=>p.id===sel),m=list.find(p=>cur&&kindOf(cur)===S.kind&&+p.no>+cur.no)||list[0];
+  if(!visible(m))setView('all');select(m.id);centerOn(m);setTimeout(()=>$(S.kind==='stor'?(+m.levels>=1?'eWid':'eLev'):(noCap(m)?'eCap':'eWp')).focus(),0)});
+function renderList(){}
+function renderFloor(){}
+function renderHint(){$('hint').textContent=S.mode==='auto'?autoHint():S.mode==='add'
+  ?`【${KIND_LABEL[S.kind]}】クリックで「${S.type}」${F()?(S.numMode==='type'?nextTypeLabel(F()):nextNo(F())+'番'):'1番'}を追加 ／ ドラッグで移動 ／ ホイールで拡大縮小・押したまま移動 ／ Shift+ドラッグで範囲選択`
+  :`【${KIND_LABEL[S.kind]}】左上のタイプを押すとそのタイプをまとめて選択（Shiftで追加） ／ ドラッグで範囲選択 ／ Shift+クリックで追加選択 ／ Ctrl+Aで全選択 ／ Deleteで削除 ／ ホイールを押したまま画面移動`}
+function renderOptions(){
+  const ts=typesOf(S.kind),sq=S.kind==='stor';
+  $('typeChips').innerHTML=ts.map((t,i)=>`<button class="pt" data-k="${esc(t.k)}" style="--c:${t.c}" title="${esc(t.k)}（記号 ${esc(t.code||'')}${i<9?'／キー '+(i+1):''}）"><i${sq?' style="border-radius:3px"':''}>${esc(t.code||'･')}</i><span>${esc(t.k)}</span><em></em></button>`).join('');renderPalStats();
+  $('palTypeH').textContent=sq?'追加する什器':'追加するタイプ';
+  $('palette').classList.toggle('min',!!S.palMin);$('palMin').textContent=S.palMin?'›':'‹';
+  document.querySelectorAll('#kindSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===S.kind));
+  document.querySelectorAll('#numSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.n===S.numMode));
+  document.querySelectorAll('#viewSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===S.view));
+    const p=F()?.points.find(x=>x.id===sel),pk=p?kindOf(p):S.kind,extra=p&&p.dept&&!S.depts.includes(p.dept)?[p.dept]:[];
+  $('eType').innerHTML=typesOf(pk).map(t=>`<option value="${esc(t.k)}">${esc(t.k)}</option>`).join('')+'<option value="__edit">＋ 選択肢を編集…</option>';
+  $('kType').innerHTML='<option value="">（変更しない）</option>'+ts.map(t=>`<option value="${esc(t.k)}">${esc(t.k)}</option>`).join('');
+  $('kDept').innerHTML='<option value="__keep">（変更しない）</option><option value="__none">（空にする）</option>'+S.depts.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('');
+  $('eDept').innerHTML='<option value="">（未選択）</option>'+[...S.depts,...extra].map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join('')+'<option value="__edit">＋ 選択肢を編集…</option>';
+}
+function renderAll(refit){renderOptions();
+  const f=F();$('empty').hidden=!!f;stage.hidden=!f;
+  if(f&&img.dataset.fid!==f.id+f.img.length){img.src=f.img;img.dataset.fid=f.id+f.img.length;img.width=f.w;img.height=f.h;refit=true}
+  if(refit)requestAnimationFrame(fit);
+  renderTabs();renderMarks();renderEdit();renderStats();renderList();renderFloor();renderHint();
+  $('mAdd').setAttribute('aria-pressed',S.mode==='add');$('mSel').setAttribute('aria-pressed',S.mode==='sel');$('mAuto').setAttribute('aria-pressed',S.mode==='auto');vp.classList.toggle('sel',S.mode==='sel');
+  syncChips();renderAuto();
+}
+function syncChips(){const full=S.mode==='sel'?fullySelectedTypes():null;
+  document.querySelectorAll('#typeChips .pt').forEach(c=>{c.setAttribute('aria-pressed',S.mode==='sel'?full.has(c.dataset.k):c.dataset.k===S.type)});
+  $('palTypeH').textContent=S.mode==='sel'?'タイプでまとめて選択':S.mode==='auto'?'見つけたものに付けるタイプ':(S.kind==='stor'?'追加する什器':'追加するタイプ');}
+const refresh=()=>{renderTabs();renderMarks();renderEdit();renderStats();renderList();renderHint();syncChips();persist()};
+function select(id){sel=id;msel.clear();renderMarks();renderEdit();renderList();renderStats();syncChips()}
+function centerOn(p){const f=F(),r=vp.getBoundingClientRect();view.tx=r.width/2-p.x*f.w*view.z;view.ty=r.height/2-p.y*f.h*view.z;applyView()}
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),2600)}
+
+/* ---------- スマートグリッド ---------- */
+S.snap=true;
+const guides=$('guides'),ghost=$('ghost');
+function snapPos(nx,ny,ex,off){
+  const f=F(),x0=nx*f.w,y0=ny*f.h,r={x:x0,y:y0,v:null,h:null,veq:false,heq:false};
+  if(off)return r;
+  const tol=8/view.z,os=f.points.filter(p=>p.id!==ex).map(p=>({x:p.x*f.w,y:p.y*f.h}));
+  let dx=tol,dy=tol;
+  for(const o of os){const ax=Math.abs(o.x-x0),ay=Math.abs(o.y-y0);if(ax<dx){dx=ax;r.v=o.x}if(ay<dy){dy=ay;r.h=o.y}}
+  if(r.h!==null)r.y=r.h;if(r.v!==null)r.x=r.v;
+  /* 等間隔：同じ行（列）に並ぶ2点の間隔を延長した位置 */
+  const eq=(line,cur)=>{line.sort((a,b)=>a-b);let best=null,bd=tol;
+    for(let i=0;i<line.length-1;i++){const d=line[i+1]-line[i];if(d<1)continue;
+      for(const t of[line[i+1]+d,line[i]-d,(line[i]+line[i+1])/2]){const a=Math.abs(t-cur);if(a<bd){bd=a;best=t}}}return best};
+  if(r.h!==null&&r.v===null){const t=eq(os.filter(o=>Math.abs(o.y-r.y)<.5).map(o=>o.x),r.x);if(t!==null){r.x=t;r.v=t;r.veq=true}}
+  if(r.v!==null&&r.h===null){const t=eq(os.filter(o=>Math.abs(o.x-r.x)<.5).map(o=>o.y),r.y);if(t!==null){r.y=t;r.h=t;r.heq=true}}
+  r.x=Math.min(f.w,Math.max(0,r.x));r.y=Math.min(f.h,Math.max(0,r.y));
+  return r;
+}
+function showGuides(r){const f=F();let h='';
+  if(r&&r.v!==null)h+=`<div class="gl v${r.veq?' eq':''}" style="left:${r.v}px;height:${f.h}px"></div>`;
+  if(r&&r.h!==null)h+=`<div class="gl h${r.heq?' eq':''}" style="top:${r.h}px;width:${f.w}px"></div>`;
+  guides.innerHTML=h}
+function hideGhost(){ghost.hidden=true;if(!drag)showGuides(null)}
+
+
+/* ---------- ポインター操作 ---------- */
+let drag=null,msel=new Set();
+function applySel(set){set=new Set(set);if(!set.size){sel=null;msel.clear()}else if(set.size===1){sel=[...set][0];msel.clear()}else{sel=null;msel=set}refresh()}
+function toggleSel(id){const set=new Set(msel.size?msel:(sel?[sel]:[]));set.has(id)?set.delete(id):set.add(id);applySel(set)}
+function toImg(e){const f=F(),r=vp.getBoundingClientRect();return{x:((e.clientX-r.left-view.tx)/view.z)/f.w,y:((e.clientY-r.top-view.ty)/view.z)/f.h}}
+vp.addEventListener('pointerdown',e=>{
+  if(!F())return;
+  if(e.button===1){e.preventDefault();vp.setPointerCapture(e.pointerId);hideGhost();drag={id:null,mid:true,sx:e.clientX,sy:e.clientY,tx:view.tx,ty:view.ty,moved:true};vp.classList.add('panning');return}
+  if(e.button>0)return;if(e.target.closest('.zoom,.hint,.empty,.palette,.vp-busy'))return;
+  if(S.mode==='auto'){vp.setPointerCapture(e.pointerId);hideGhost();
+    if(AU.phase==='sample'||AU.phase==='area'){drag={abox:true,sx:e.clientX,sy:e.clientY,moved:false};return}
+    const cd=e.target.closest('.cand');drag={id:null,auto:true,ci:cd?+cd.dataset.ci:null,sx:e.clientX,sy:e.clientY,tx:view.tx,ty:view.ty,moved:false};return}
+  const mk=e.target.closest('.mk');vp.setPointerCapture(e.pointerId);
+  if(mk&&(e.shiftKey||e.ctrlKey||e.metaKey)){toggleSel(mk.dataset.id);drag=null;return}
+  if(!mk&&(S.mode==='sel'||e.shiftKey)){hideGhost();drag={box:true,add:e.shiftKey,sx:e.clientX,sy:e.clientY,moved:false};return}
+  const id=mk?mk.dataset.id:null,group=!!(id&&msel.has(id)&&msel.size>1);
+  drag={id,group,sx:e.clientX,sy:e.clientY,tx:view.tx,ty:view.ty,moved:false};
+  if(group){drag.sp=toImg(e);drag.start=new Map(F().points.filter(p=>msel.has(p.id)).map(p=>[p.id,{x:p.x,y:p.y}]))}
+  else if(mk&&sel!==id)select(id);
+});
+vp.addEventListener('pointermove',e=>{
+  if(!drag){
+    if(S.mode!=='add'||!F()||e.pointerType==='touch'||e.target.closest('.mk:not(.ghost),.zoom,.hint,.palette')){hideGhost();return}
+    const f=F(),q=toImg(e);if(q.x<0||q.y<0||q.x>1||q.y>1){hideGhost();return}
+    const sp=snapPos(q.x,q.y,null,e.altKey);ghost.hidden=false;ghost.style.left=sp.x+'px';ghost.style.top=sp.y+'px';
+    ghost.style.setProperty('--c',color(S.type));ghost.classList.toggle('sq',S.kind==='stor');ghost.firstChild.textContent=S.numMode==='type'?nextTypeLabel(f):nextNo(f);showGuides(sp);return}const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
+  if(drag.mid){view.tx=drag.tx+dx;view.ty=drag.ty+dy;applyView();return}
+  if(!drag.moved&&Math.hypot(dx,dy)<4)return;
+  if(drag.box||drag.abox){drag.moved=true;const r=vp.getBoundingClientRect(),mq=$('marquee');mq.hidden=false;
+    mq.style.left=Math.min(drag.sx,e.clientX)-r.left+'px';mq.style.top=Math.min(drag.sy,e.clientY)-r.top+'px';mq.style.width=Math.abs(dx)+'px';mq.style.height=Math.abs(dy)+'px';return}
+  if(drag.group){if(!drag.moved){drag.moved=true;snap()}const q=toImg(e),ddx=q.x-drag.sp.x,ddy=q.y-drag.sp.y,f=F();
+    for(const p of f.points){const o=drag.start.get(p.id);if(o){p.x=Math.min(1,Math.max(0,o.x+ddx));p.y=Math.min(1,Math.max(0,o.y+ddy))}}renderMarks();return}
+  if(!drag.moved){drag.moved=true;if(drag.id)snap();else vp.classList.add('panning')}
+  if(drag.id){const f=F(),p=f.points.find(x=>x.id===drag.id),q=toImg(e),sp=snapPos(q.x,q.y,p.id,e.altKey);p.x=sp.x/f.w;p.y=sp.y/f.h;showGuides(sp);
+    const el=marks.querySelector(`[data-id="${drag.id}"]`);if(el){el.style.left=p.x*F().w+'px';el.style.top=p.y*F().h+'px'}}
+  else{view.tx=drag.tx+dx;view.ty=drag.ty+dy;applyView()}
+});
+vp.addEventListener('pointerup',e=>{
+  if(!drag)return;const d=drag;drag=null;vp.classList.remove('panning');showGuides(null);
+  if(d.abox){$('marquee').hidden=true;autoBox(d,e);return}
+  if(d.auto){if(!d.moved)autoClick(d,e);return}
+  if(d.box){$('marquee').hidden=true;
+    if(!d.moved){if(!d.add){sel=null;msel.clear();refresh()}return}
+    const f=F(),r=vp.getBoundingClientRect(),x1=Math.min(d.sx,e.clientX),x2=Math.max(d.sx,e.clientX),y1=Math.min(d.sy,e.clientY),y2=Math.max(d.sy,e.clientY);
+    const ids=f.points.filter(editable).filter(p=>{const x=r.left+view.tx+p.x*f.w*view.z,y=r.top+view.ty+p.y*f.h*view.z;return x>=x1&&x<=x2&&y>=y1&&y<=y2}).map(p=>p.id);
+    applySel(d.add?[...msel,...(sel?[sel]:[]),...ids]:ids);if(ids.length>1)toast(`${msel.size||1} 件を選択しました`);return}
+  if(d.group){if(d.moved)persist();return}
+  if(d.moved){if(d.id)persist();return}
+  if(d.id)return;
+  if(S.mode==='add'){const q=toImg(e);if(q.x<0||q.y<0||q.x>1||q.y>1)return;snap();
+    if(!visible({kind:S.kind}))S.view='all';const f=F(),sp=snapPos(q.x,q.y,null,e.altKey),p=S.kind==='stor'?{id:uid(),kind:'stor',no:nextNo(f),type:S.type,name:'',dept:'',levels:'',width:'',rot:0,memo:'',x:sp.x/f.w,y:sp.y/f.h}:{id:uid(),kind:'occ',no:nextNo(f),type:S.type,name:'',dept:'',cap:defCap(S.type),wp:'',rot:0,memo:'',x:sp.x/f.w,y:sp.y/f.h};applyTypeDims(p,true);autoWp(p);f.points.push(p);sel=p.id;msel.clear();refresh();if(noDim(p))setTimeout(()=>$('eLev').focus(),0);else if(noCap(p))setTimeout(()=>$('eCap').focus(),0)}
+  else{sel=null;refresh()}
+});
+vp.addEventListener('pointercancel',()=>{drag=null;$('marquee').hidden=true;vp.classList.remove('panning');showGuides(null)});
+vp.addEventListener('pointerleave',hideGhost);
+vp.addEventListener('mousedown',e=>{if(e.button===1)e.preventDefault()});
+vp.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()});
+vp.addEventListener('wheel',e=>{if(!F())return;e.preventDefault();const r=vp.getBoundingClientRect();zoomAt(e.deltaY<0?1.15:1/1.15,e.clientX-r.left,e.clientY-r.top)},{passive:false});
+$('zIn').onclick=()=>{const r=vp.getBoundingClientRect();zoomAt(1.25,r.width/2,r.height/2)};
+$('zOut').onclick=()=>{const r=vp.getBoundingClientRect();zoomAt(0.8,r.width/2,r.height/2)};
+$('zFit').onclick=fit;
+function applyPin(){const o=S.pin=Object.assign({size:100,text:100},S.pin||{});stage.style.setProperty('--ps',o.size/100);stage.style.setProperty('--fs',o.text/100);
+  $('pinSize').value=o.size;$('pinText').value=o.text;$('pinSizeV').textContent=o.size+'%';$('pinTextV').textContent=o.text+'%'}
+$('pinSize').addEventListener('input',e=>{S.pin.size=+e.target.value;applyPin();persist()});
+$('pinText').addEventListener('input',e=>{S.pin.text=+e.target.value;applyPin();persist()});
+$('pinReset').onclick=()=>{S.pin={size:100,text:100};applyPin();persist()};
+$('zPct').onclick=()=>{const r=vp.getBoundingClientRect();zoomAt(1/view.z,r.width/2,r.height/2)};
+$('zRot').onclick=async()=>{
+  const f=F();if(!f)return;
+  const im=await new Promise((ok,ng)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ng;i.src=f.img}).catch(()=>null);if(!im)return;
+  const c=document.createElement('canvas');c.width=f.h;c.height=f.w;const g=c.getContext('2d');g.translate(c.width,0);g.rotate(Math.PI/2);g.drawImage(im,0,0,f.w,f.h);
+  f.img=c.toDataURL(/^data:image\/png/.test(f.img)?'image/png':'image/jpeg',.92);[f.w,f.h]=[f.h,f.w];
+  for(const p of f.points){const x=p.x;p.x=1-p.y;p.y=x;p.rot=((+p.rot||0)+90)%360}
+  undo=undo.filter(u=>u.fi!==S.cur);renderAll(true);persist();toast('図面を右に90°回転しました');
+};
+addEventListener('resize',()=>{});
+
+/* ---------- キーボード ---------- */
+document.addEventListener('keydown',e=>{
+  const typing=/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!typing){e.preventDefault();doUndo();return}
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'&&!typing&&F()){e.preventDefault();applySel(F().points.filter(editable).map(p=>p.id));return}
+  if(typing)return;
+  if(e.key==='a'||e.key==='A'){setMode('add')}
+  else if(e.key==='v'||e.key==='V'){setMode('sel')}
+  else if((e.key==='f'||e.key==='F')&&!e.ctrlKey&&!e.metaKey){setMode('auto')}
+  else if(e.key==='Escape'&&S.mode==='auto'&&AU.phase==='area'){AU.phase='ready';renderAuto()}
+  else if(/^[1-9]$/.test(e.key)&&typesOf(S.kind)[+e.key-1]){S.type=typesOf(S.kind)[+e.key-1].k;renderAll();persist()}
+  else if(e.key==='r'||e.key==='R'){if(sel||msel.size)rotateSel()}
+  else if((sel||msel.size)&&(e.key==='Delete'||e.key==='Backspace')){e.preventDefault();msel.size>1?delMany([...msel]):delSel()}
+  else if((sel||msel.size)&&e.key.startsWith('Arrow')){e.preventDefault();const f=F(),ids=msel.size>1?msel:new Set([sel]),ps=f.points.filter(x=>ids.has(x.id));if(!ps.length)return;
+    const st=(e.shiftKey?10:1)/view.z;if(!e.repeat)snap();
+    for(const p of ps){if(e.key==='ArrowLeft')p.x-=st/f.w;if(e.key==='ArrowRight')p.x+=st/f.w;if(e.key==='ArrowUp')p.y-=st/f.h;if(e.key==='ArrowDown')p.y+=st/f.h}renderMarks();persist()}
+  else if(e.key==='Escape'){sel=null;msel.clear();refresh()}
+});
+
+/* ---------- 編集パネル ---------- */
+function upd(k,v){const p=F()?.points.find(x=>x.id===sel);if(!p)return;p[k]=v;renderMarks();renderEdit();renderStats();renderList();renderTabs();persist()}
+
+$('eNo').addEventListener('change',e=>{
+  const f=F(),p=f&&f.points.find(x=>x.id===sel);if(!p)return;
+  const kd=kindOf(p),o=+p.no,mx=f.points.filter(x=>kindOf(x)===kd).reduce((m,x)=>Math.max(m,+x.no||0),0);
+  let n=Math.round(+e.target.value);if(e.target.value===''||!isFinite(n)){e.target.value=o;return}
+  n=Math.min(Math.max(1,n),mx);if(n===o){e.target.value=o;return}
+  snap();
+  f.points.forEach(x=>{if(x===p||kindOf(x)!==kd)return;const v=+x.no;
+    if(n<o&&v>=n&&v<o)x.no=v+1;else if(n>o&&v>o&&v<=n)x.no=v-1});
+  p.no=n;e.target.value=n;refresh()});
+$('eNo').addEventListener('keydown',e=>{if(e.key==='Enter')e.target.blur()});
+$('eType').addEventListener('change',e=>{if(e.target.value==='__edit'){renderEdit();openOptions('type');return}snap();const p=F()?.points.find(x=>x.id===sel);if(!p)return;p.type=e.target.value;if(noCap(p)&&isDef1(p.type))p.cap=1;autoWp(p,true);applyTypeDims(p,true);upd('type',p.type);for(const[k,id]of[['cap','eCap'],['wp','eWp'],['levels','eLev'],['width','eWid']])$(id).value=p[k]??''});
+$('eName').addEventListener('input',e=>upd('name',e.target.value));
+$('eDept').addEventListener('change',e=>{if(e.target.value==='__edit'){renderEdit();openOptions('dept');return}snap();upd('dept',e.target.value)});
+$('eCap').addEventListener('input',e=>{const p=F()?.points.find(x=>x.id===sel);if(!p)return;p.cap=e.target.value===''?'':+e.target.value;autoWp(p);upd('cap',p.cap)});
+$('eWp').addEventListener('input',e=>upd('wp',e.target.value===''?'':+e.target.value));
+$('eMemo').addEventListener('input',e=>upd('memo',e.target.value));
+$('eLev').addEventListener('input',e=>upd('levels',e.target.value===''?'':+e.target.value));
+$('eWid').addEventListener('input',e=>upd('width',e.target.value===''?'':+e.target.value));
+function rotateSel(){const f=F();if(!f)return;const ids=msel.size>1?msel:new Set(sel?[sel]:[]);const ps=f.points.filter(x=>ids.has(x.id));if(!ps.length)return;snap();for(const p of ps)p.rot=((+p.rot||0)+90)%360;refresh()}
+$('eRot').onclick=rotateSel;$('kRot').onclick=rotateSel;
+function delSel(){const f=F();if(!f||!sel)return;const d=f.points.find(x=>x.id===sel);if(!d)return;snap();
+  f.points=f.points.filter(x=>x.id!==sel);
+  closeGaps(f,[d]);
+  sel=null;refresh()}
+$('eDel').onclick=delSel;
+function delMany(ids){const f=F();if(!f)return;const del=new Set(ids),rm=f.points.filter(x=>del.has(x.id));if(!rm.length)return;snap();
+  f.points=f.points.filter(x=>!del.has(x.id));
+  closeGaps(f,rm);
+  sel=null;msel.clear();refresh();toast(`${rm.length} 件を削除しました（元に戻す可）`)}
+$('kClear').onclick=()=>{msel.clear();refresh()};
+$('kDel').onclick=()=>{const b=$('kDel');if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent=`もう一度押すと ${msel.size} 件を削除`;return}delMany([...msel])};
+$('kApply').onclick=()=>{
+  const st=S.kind==='stor',f=F(),ps=f.points.filter(p=>msel.has(p.id)),t=$('kType').value,n=$('kName').value.trim(),d=$('kDept').value,c=st?'':$('kCap').value,wp=st?'':$('kWp').value,m=$('kMemo').value.trim(),lv=st?$('kLev').value:'',wd=st?$('kWid').value:'';
+  if(!t&&!n&&d==='__keep'&&c===''&&wp===''&&!m&&lv===''&&wd===''){toast('変更する項目を入力または選択してください');return}
+  if(c!==''&&!(+c>=1)){toast('席数は1以上の数で入力してください');return}
+  if(wp!==''&&!(+wp>=0)){toast('WPは0以上の数で入力してください');return}
+  if(lv!==''&&!(+lv>=1)){toast('段数は1以上の数で入力してください');return}
+  if(wd!==''&&!(+wd>0)){toast('幅は0より大きい数で入力してください');return}
+  snap();for(const p of ps){if(t){p.type=t;if(noCap(p)&&isDef1(t))p.cap=1;applyTypeDims(p,true);autoWp(p,true)}if(n)p.name=n;if(d!=='__keep')p.dept=d==='__none'?'':d;if(c!=='')p.cap=+c;if(wp!=='')p.wp=+wp;autoWp(p);if(lv!=='')p.levels=+lv;if(wd!=='')p.width=+wd;if(m)p.memo=m}
+  $('kType').value='';$('kName').value='';$('kDept').value='__keep';$('kCap').value='';$('kWp').value='';$('kLev').value='';$('kWid').value='';$('kMemo').value='';
+  refresh();toast(`${ps.length} 件をまとめて変更しました`)};
+function stepSel(d){const f=F();if(!f||!f.points.length)return;const l=f.points.filter(editable).sort((a,b)=>(+a.no||0)-(+b.no||0));if(!l.length)return;let i=l.findIndex(p=>p.id===sel);
+  i=i<0?0:(i+d+l.length)%l.length;const p=l[i];select(p.id);
+  const r=vp.getBoundingClientRect(),x=view.tx+p.x*f.w*view.z,y=view.ty+p.y*f.h*view.z;if(x<60||y<60||x>r.width-60||y>r.height-60)centerOn(p)}
+$('ePrev').onclick=()=>stepSel(-1);$('eNext').onclick=()=>stepSel(1);
+
+function setMode(m){S.mode=m;renderAll();persist()}
+$('mAdd').onclick=()=>setMode('add');$('mSel').onclick=()=>setMode('sel');$('mAuto').onclick=()=>setMode('auto');
+$('numSeg').addEventListener('click',e=>{const b=e.target.closest('button[data-n]');if(!b)return;S.numMode=b.dataset.n;renderAll();persist()});
+$('kindSeg').addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(b)setKind(b.dataset.k)});
+$('viewSeg').addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(b)setView(b.dataset.v)});
+$('palMin').onclick=()=>{S.palMin=!S.palMin;renderOptions();persist()};
+$('typeChips').addEventListener('click',e=>{const c=e.target.closest('.pt');if(!c)return;
+  if(S.mode==='sel'){selectType(c.dataset.k,e.shiftKey||e.ctrlKey||e.metaKey);return}
+  S.type=c.dataset.k;renderAll();persist()});
+
+function doUndo(){const u=undo.pop();if(!u){toast('これ以上戻せません');return}if(!S.floors[u.fi])return;S.cur=u.fi;S.floors[u.fi].points=JSON.parse(u.pts);
+  if(!F().points.some(p=>p.id===sel&&editable(p)))sel=null;msel=new Set([...msel].filter(id=>F().points.some(p=>p.id===id)));renderAll();persist()}
+$('bUndo').onclick=doUndo;
+
+
+/* ---------- フロア ---------- */
+function readImage(file,cb){const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
+  let w=im.naturalWidth,h=im.naturalHeight,src=r.result;const MAX=4000;
+  if(Math.max(w,h)>MAX){const k=MAX/Math.max(w,h);w=Math.round(w*k);h=Math.round(h*k);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);src=c.toDataURL('image/jpeg',0.9)}
+  cb({img:src,w,h})};im.onerror=()=>toast('画像を読み込めませんでした。PNG か JPG を選んでください');im.src=r.result};r.readAsDataURL(file)}
+$('fImg').onchange=e=>{const file=e.target.files[0];e.target.value='';if(!file)return;
+  readImage(file,o=>{S.floors.push({id:uid(),name:file.name.replace(/\.[^.]+$/,''),points:[],...o});S.cur=S.floors.length-1;sel=null;S.mode='add';renderAll(true);persist()})};
+$('fReplace').onchange=e=>{const file=e.target.files[0];e.target.value='';if(!file||!F())return;
+  readImage(file,o=>{Object.assign(F(),o);renderAll(true);persist();toast('図面を差し替えました。プロットは相対位置のまま残っています')})};
+
+/* ---------- 出力・読込 ---------- */
+async function saveFile(name,blob){
+  let dl=null;try{if(window.claude&&window.claude.use)dl=await window.claude.use('downloads')}catch(e){}
+  if(dl){try{await dl.save({filename:name,data:blob});toast('保存しました')}catch(e){if(!e||e.code!=='declined')toast('保存できませんでした（'+((e&&e.code)||'エラー')+'）')}return true}
+  try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}catch(e){}
+  return window.top===window;
+}
+async function offer(name,text,mime){
+  if(await saveFile(name,new Blob([text],{type:mime})))return;
+  const m=document.createElement('div');m.className='modal';
+  m.innerHTML=`<div><b>${esc(name)}</b><div class="muted" style="font-size:12px">ダウンロードが始まらない環境では、下の内容をコピーしてファイルに貼り付けてください。</div><textarea id="mTxt" readonly></textarea><div class="flex"><button class="primary" id="mCopy">コピー</button><button id="mClose">閉じる</button></div></div>`;
+  document.body.appendChild(m);const ta=m.querySelector('textarea');ta.value=text.length>2e6?text.slice(0,2e6)+'\n…（長すぎるため省略）':text;
+  m.querySelector('#mCopy').onclick=()=>{navigator.clipboard?.writeText(text).then(()=>toast('コピーしました'),()=>{ta.select();toast('選択しました。Ctrl+C でコピーしてください')})??(ta.select())};
+  m.querySelector('#mClose').onclick=()=>m.remove();m.onclick=e=>{if(e.target===m)m.remove()};
+}
+const stamp=()=>{const d=new Date(),z=n=>String(n).padStart(2,'0');return`${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}`};
+function drawPng(f,im,o,filt){
+  filt=filt||S.view||'all';
+  const vis=p=>filt==='all'||kindOf(p)===filt;
+  const pts=f.points.filter(vis),sm=seqMap(f);
+  const FF='"Hiragino Sans","Yu Gothic UI","Meiryo",system-ui,sans-serif';
+  const base=Math.max(10,Math.max(f.w,f.h)/110);
+  const r=base*o.circle/100,fs=r*.95*o.text/100,lr=base*o.legend/100,pad=Math.round(lr*1.6),lh=Math.round(lr*2.6);
+  const c=document.createElement('canvas'),g=c.getContext('2d');
+  /* 凡例：種別ごとに1行目に見出し、続けてタイプ */
+  const groups=['occ','stor'].filter(kd=>filt==='all'||filt===kd).map(kd=>{const ps=pts.filter(p=>kindOf(p)===kd);
+    const items=typesOf(kd).filter(t=>ps.some(p=>p.type===t.k)).map(t=>{const tp=ps.filter(p=>p.type===t.k);
+      return{t,sq:kd==='stor',txt:kd==='stor'?`${t.k} ${tp.length}台（${fmt1(tp.reduce((s,p)=>s+fmOf(p),0))}fm）`:`${t.k} ${tp.length}`}});
+    const head=kd==='stor'?`収納量：${ps.length} 台・${fmt1(ps.reduce((s,p)=>s+fmOf(p),0))} fm`:`スペース：${ps.length} 箇所・席数 ${ps.reduce((s,p)=>s+(+p.cap||0),0)}・${ps.reduce((s,p)=>s+(+p.wp||0),0)} WP`;
+    return{kd,items,head,n:ps.length}}).filter(gp=>gp.n);
+  const maxW=f.w-pad*2;let rows=0;
+  g.font=`${Math.round(lr*1.05)}px ${FF}`;
+  for(const gp of groups){let rowW=0;rows+=2;for(const it of gp.items){it.w=lr*1.6+g.measureText(it.txt).width+lr*1.6;if(rowW+it.w>maxW&&rowW>0){rows++;rowW=0}rowW+=it.w}}
+  const legH=o.legendOn&&groups.length?pad*2+lh+rows*lh:0;
+  c.width=f.w;c.height=Math.round(f.h+legH);
+  g.fillStyle='#ffffff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,f.w,f.h);
+  for(const p of[...pts].sort((a,b)=>kindOf(a)===kindOf(b)?(+a.no||0)-(+b.no||0):(kindOf(a)>kindOf(b)?1:-1))){
+    const sq=kindOf(p)==='stor',x=p.x*f.w,y=p.y*f.h,t=shownLabel(p,sm);g.font=`bold ${Math.max(1,Math.round(fs))}px ${FF}`;
+    const h=sq?r*1.8:r*2,w=Math.max(sq?r*2.4:r*2,g.measureText(t).width+fs*.9),rad=sq?r*.32:r;
+    g.save();g.translate(x,y);g.rotate((+p.rot||0)*Math.PI/180);
+    g.beginPath();if(g.roundRect)g.roundRect(-w/2,-h/2,w,h,Math.min(rad,h/2));else g.rect(-w/2,-h/2,w,h);
+    g.fillStyle=color(p.type);g.shadowColor='rgba(0,0,0,.35)';g.shadowBlur=r*.3;g.fill();g.shadowBlur=0;
+    g.lineWidth=Math.max(1,r*.16);g.strokeStyle='#ffffff';g.stroke();
+    if(o.text>0){g.fillStyle='#ffffff';g.textAlign='center';g.textBaseline='middle';g.fillText(t,0,fs*.05)}
+    g.restore()}
+  const cf=Math.round((o.legendOn&&groups.length?lr:base)*.9),COPY='© 合同会社mokume　無断複製・再配布禁止';
+  if(o.legendOn&&groups.length){
+    let y=f.h+pad;g.strokeStyle='#d5dcd9';g.lineWidth=1;g.beginPath();g.moveTo(0,f.h+.5);g.lineTo(c.width,f.h+.5);g.stroke();
+    g.textAlign='left';g.textBaseline='middle';g.fillStyle='#1d2624';g.font=`bold ${Math.round(lr*1.2)}px ${FF}`;
+    g.fillText(f.name,pad,y+lh/2);y+=lh;
+    for(const gp of groups){g.font=`bold ${Math.round(lr*1.05)}px ${FF}`;g.fillStyle='#1d2624';g.fillText(gp.head,pad,y+lh/2);y+=lh;
+      g.font=`${Math.round(lr*1.05)}px ${FF}`;let x=pad;
+      for(const it of gp.items){if(x+it.w>pad+maxW&&x>pad){x=pad;y+=lh}
+        g.beginPath();const s=lr*.55;if(it.sq){g.rect(x,y+lh/2-s,s*2,s*2)}else g.arc(x+s,y+lh/2,s,0,Math.PI*2);g.fillStyle=color(it.t.k);g.fill();
+        g.fillStyle='#1d2624';g.fillText(it.txt,x+lr*1.6,y+lh/2);x+=it.w}
+      y+=lh}
+    g.font=`${cf}px ${FF}`;g.textAlign='right';g.fillStyle='#5f6c68';g.fillText(COPY,c.width-cf,f.h+pad+lh/2)}
+  else{g.font=`${cf}px ${FF}`;g.textAlign='right';g.textBaseline='middle';const tw=g.measureText(COPY).width,cx=c.width-cf,cy=c.height-cf*1.2;
+    g.fillStyle='rgba(255,255,255,.85)';g.fillRect(cx-tw-cf*.5,cy-cf*.8,tw+cf,cf*1.6);g.fillStyle='#5f6c68';g.fillText(COPY,cx,cy)}
+  return c;
+}
+async function openPng(settingsOnly,fl,filt0){
+  let filt=filt0||S.view||'all';
+  const f=fl||F();if(!f){toast('図面がありません');return}
+  const im=await new Promise((ok,ng)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ng;i.src=f.img}).catch(()=>null);
+  if(!im){toast('図面を読み込めませんでした');return}
+  const o=S.png=Object.assign({circle:100,text:100,legend:100,legendOn:true},S.png||{});
+  const m=document.createElement('div');m.className='modal';
+  const sl=(id,lbl,min,max,v)=>`<label class="sl"><span>${lbl}</span><input type="range" id="${id}" min="${min}" max="${max}" step="5" value="${v}"><output id="${id}V">${v}%</output></label>`;
+  m.innerHTML=`<div class="sv pv" role="dialog" aria-label="画像保存">
+    <div class="sv-h"><b>画像保存：${esc(f.name)}</b><button id="pvX" aria-label="閉じる">×</button></div>
+    <div class="pv-box"><canvas id="pvC"></canvas></div>
+    <div class="pv-ctl">
+      ${sl('pvCircle','図形の大きさ',30,400,o.circle)}
+      ${sl('pvText','番号の文字',40,200,o.text)}
+      ${sl('pvLeg','凡例の文字',50,400,o.legend)}
+      <div class="flex al"><label class="ck"><input type="checkbox" id="pvLegOn" ${o.legendOn?'checked':''}>凡例を付ける</label><button id="pvReset">標準に戻す</button></div>
+      ${filt0?'':`<label class="sl" style="grid-template-columns:72px 1fr"><span>表示</span><select id="pvFilt"><option value="all">すべて（スペース＋収納量）</option><option value="occ">スペースのみ</option><option value="stor">収納量のみ</option></select></label>`}
+    </div>
+    <div class="flex" style="justify-content:flex-end"><button id="pvCancel">キャンセル</button><button class="primary" id="pvGo">${settingsOnly?'この設定にする':'PNGで保存'}</button></div></div>`;
+  document.body.appendChild(m);
+  const q=x=>m.querySelector(x),close=()=>m.remove(),pc=q('#pvC');let raf=0,cur=null;
+  const draw=()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{
+    o.circle=+q('#pvCircle').value;o.text=+q('#pvText').value;o.legend=+q('#pvLeg').value;o.legendOn=q('#pvLegOn').checked;
+    for(const k of['pvCircle','pvText','pvLeg'])q('#'+k+'V').textContent=q('#'+k).value+'%';
+    q('#pvLeg').disabled=!o.legendOn;
+    if(q('#pvFilt'))filt=q('#pvFilt').value;cur=drawPng(f,im,o,filt);const k=Math.min(1,1600/Math.max(cur.width,cur.height));
+    pc.width=Math.round(cur.width*k);pc.height=Math.round(cur.height*k);
+    pc.getContext('2d').drawImage(cur,0,0,pc.width,pc.height);persist()})};
+  m.addEventListener('input',draw);m.addEventListener('change',draw);
+  q('#pvReset').onclick=()=>{q('#pvCircle').value=100;q('#pvText').value=100;q('#pvLeg').value=100;q('#pvLegOn').checked=true;draw()};
+  q('#pvX').onclick=close;q('#pvCancel').onclick=close;m.addEventListener('click',e=>{if(e.target===m)close()});
+  q('#pvGo').onclick=async()=>{
+    if(settingsOnly){persist();close();toast('図面画像の設定を保存しました');return}
+    const c=cur||drawPng(f,im,o,filt);const blob=await new Promise(ok=>c.toBlob(ok,'image/png'));
+    if(!blob){toast('画像を作成できませんでした');return}
+    const ok=await saveFile(`${f.name.replace(/[\\/:*?"<>|]/g,'_')}_プロット図${filt==='all'?'':'_'+KIND_LABEL[filt]}.png`,blob);
+    if(!ok)toast('この画面ではダウンロードできません。ローカルのHTMLから保存してください');else close();
+  };
+  if(q('#pvFilt'))q('#pvFilt').value=filt;
+  draw();
+};
+/* ---------- 作業ファイル：保存・開く ---------- */
+const pkgAll=()=>({app:'as-is',ver:1,types:S.types,depts:S.depts,floors:S.floors});
+/* 稼働率だけの作業ファイル（稼働率調査プロッター・分析ツールと同じ形式） */
+const pkgOcc=()=>({app:'occ-plotter',ver:2,types:typesOf('occ').map(({k,c,multi,def1})=>({k,c,multi:!!multi,def1:!!def1})),depts:S.depts,
+  floors:S.floors.map(f=>({id:f.id,name:f.name,img:f.img,w:f.w,h:f.h,points:f.points.filter(p=>kindOf(p)==='occ').map(({id,no,type,name,dept,cap,memo,x,y})=>({id,no,type,name,dept,cap,memo,x,y}))}))});
+$('bSave').onclick=()=>{
+  document.querySelector('.fmenu')?.remove();
+  const btn=$('bSave'),r=btn.getBoundingClientRect(),m=document.createElement('div');m.className='fmenu';m.style.left=r.left+'px';m.style.top=(r.bottom+6)+'px';
+  m.innerHTML=`<button data-a="all"><b>作業ファイルを保存</b></button><div class="muted sm">図面・スペース・収納量のプロットをすべて保存します</div>
+    <div class="pal-sep"></div><button data-a="occ">スペースだけを保存（稼働率調査プロッター形式）</button><div class="muted sm">稼働率調査プロッター・分析ツールで開ける形式で書き出します</div>`;
+  document.body.appendChild(m);
+  const close=()=>{m.remove();removeEventListener('pointerdown',out,true)};const out=e=>{if(!m.contains(e.target)&&e.target!==btn)close()};
+  setTimeout(()=>addEventListener('pointerdown',out,true));
+  m.onclick=e=>{const b=e.target.closest('button');if(!b)return;close();
+    if(b.dataset.a==='all')offer(`SPACE-COUNTER_作業ファイル_${stamp()}.json`,JSON.stringify(pkgAll()),'application/json');
+    else offer(`稼働率調査_プロットデータ_${stamp()}.json`,JSON.stringify(pkgOcc()),'application/json')};
+};
+$('fJson').onchange=e=>{const file=e.target.files[0];e.target.value='';if(!file)return;const r=new FileReader();
+  r.onload=()=>{let o;try{o=JSON.parse(r.result)}catch(err){toast('このファイルは読み込めません（JSONではありません）');return}
+    if(o&&Array.isArray(o.pins)&&!Array.isArray(o.floors)){importStorageV1(o,file.name);return}
+    try{if(!Array.isArray(o.floors))throw 0;const legacy=o.app==='occ-plotter';
+      S.floors=o.floors;if(Array.isArray(o.types)&&o.types.length){S.types=o.types.map(t=>({...t,kind:legacy?'occ':(t.kind||'occ')}))}
+      if(Array.isArray(o.depts))S.depts=o.depts;
+      if(legacy)for(const f of S.floors)for(const p of f.points)p.kind='occ';
+      migrate();S.cur=0;sel=null;msel.clear();undo=[];renderAll(true);persist();
+      toast(`${o.floors.length} フロアを読み込みました`+(legacy?'（稼働率調査プロッターの作業ファイル）':''))}
+    catch(err){toast('このファイルは読み込めません。「保存」で作った作業ファイルを選んでください')}};r.readAsText(file)};
+
+/* ---------- 収納量調査アプリ（旧版）の保存データを取り込む ---------- */
+function importStorageV1(o,fname){
+  if(!S.floors.length){toast('先に、同じPDFページを画像にした図面を追加してください');return}
+  const pages={};for(const p of o.pins){const k=+p.page||1;(pages[k]=pages[k]||[]).push(p)}
+  const keys=Object.keys(pages).map(Number).sort((a,b)=>a-b);
+  const m=document.createElement('div');m.className='modal';
+  m.innerHTML=`<div class="sv" role="dialog" aria-label="収納量調査データの取り込み">
+    <div class="sv-h"><b>収納量調査データの取り込み</b><button id="iX" aria-label="閉じる">×</button></div>
+    <div class="muted sm">旧版の収納量調査アプリで保存したデータです（${esc(o.pdfFileName||fname)}・${o.pins.length} 件）。<br>
+      PDFの各ページを、そのページを画像にした図面（フロア）に割り当ててください。位置は図面に対する割合で取り込むため、<b>同じページを余白・向きを変えずに画像化した図面</b>を選びます。</div>
+    <div class="ol" id="iRows">${keys.map(k=>`<div class="orow"><b style="min-width:7em">PDF ${k} ページ</b><span class="muted sm">${pages[k].length} 件</span>
+      <select data-pg="${k}" style="margin-left:auto"><option value="">取り込まない</option>${S.floors.map((f,i)=>`<option value="${f.id}" ${i===S.cur&&k===keys[0]?'selected':''}>${esc(f.name)}</option>`).join('')}</select></div>`).join('')}</div>
+    <div class="muted sm">番号は、割り当てたフロアの収納量の番号の続きから、元の番号順に振り直します。段数・幅はローキャビ 3段×0.9m、ハイキャビ 6段×0.9m、その他は保存データの値を使います。</div>
+    <div class="flex" style="justify-content:flex-end"><button id="iCancel">キャンセル</button><button class="primary" id="iGo">取り込む</button></div></div>`;
+  document.body.appendChild(m);const q=x=>m.querySelector(x),close=()=>m.remove();
+  q('#iX').onclick=close;q('#iCancel').onclick=close;m.addEventListener('click',e=>{if(e.target===m)close()});
+  const TY={low:'ローキャビ',high:'ハイキャビ',other:'その他什器'};
+  q('#iGo').onclick=()=>{let n=0;const touched=new Set();
+    for(const s of m.querySelectorAll('select[data-pg]')){if(!s.value)continue;const f=S.floors.find(x=>x.id===s.value);if(!f)continue;
+      if(!touched.has(f.id)){undo.push({fi:S.floors.indexOf(f),pts:JSON.stringify(f.points)});touched.add(f.id)}
+      let no=nextNo(f,'stor');
+      for(const p of[...pages[+s.dataset.pg]].sort((a,b)=>(+a.no||+a.seq||0)-(+b.no||+b.seq||0))){
+        const type=TY[p.cat]||'その他什器',lv=Array.isArray(p.levels)?p.levels.length:(+p.levels||''),wd=p.cat==='other'?(+p.length||''):'';
+        const np={id:uid(),kind:'stor',no:no++,type,name:'',dept:p.dept||'',levels:lv,width:wd,rot:[0,90,180,270].includes(+p.rot)?+p.rot:0,memo:'',
+          x:Math.min(1,Math.max(0,(+p.xPct||0)/100)),y:Math.min(1,Math.max(0,(+p.yPct||0)/100))};
+        applyTypeDims(np,p.cat!=='other');f.points.push(np);n++}}
+    if(!n){toast('取り込むページが選ばれていません');return}
+    close();if(S.kind!=='stor')setKind('stor',true);if(S.view==='occ')S.view='all';renderAll();persist();toast(`収納量のプロットを ${n} 件取り込みました`)};
+}
+
+/* ---------- 数量Excel（スペース・収納量をシートに分けて一括出力） ---------- */
+$('bXlsx').onclick=async()=>{
+  const X=SurveyXlsx,{cell,row,ST}=X;
+  const SM=new Map(S.floors.map(f=>[f.id,seqMap(f)]));
+  const sp=S.floors.flatMap(f=>f.points.filter(p=>kindOf(p)==='occ').map(p=>({...p,floor:f.name,tno:typeLabel(p,SM.get(f.id))})));
+  const st=S.floors.flatMap(f=>f.points.filter(p=>kindOf(p)==='stor').map(p=>({...p,floor:f.name,tno:typeLabel(p,SM.get(f.id))})));
+  if(!sp.length&&!st.length){toast('プロットがありません');return}
+  const mc=sp.filter(p=>noCap(p)||noWp(p)),md=st.filter(noDim);
+  if(mc.length||md.length){const lines=[];
+    if(mc.length)lines.push(`席数・WPが未入力のスペース ${mc.length} 件（${mc.slice(0,6).map(p=>p.floor+' '+p.no).join('、')}${mc.length>6?' ほか':''}）`);
+    if(md.length)lines.push(`段数・幅が未入力の収納 ${md.length} 件（${md.slice(0,6).map(p=>p.floor+' '+p.no).join('、')}${md.length>6?' ほか':''}）`);
+    if(!confirm(lines.join('\n')+'\n\n未入力のまま（0として）出力しますか？'))return}
+  const byNo=(a,b)=>(+a.no||0)-(+b.no||0);
+  const floorsOf=list=>S.floors.map(f=>f.name).filter((n,i,a)=>a.indexOf(n)===i&&list.some(p=>p.floor===n));
+  const sorted=list=>floorsOf(list).flatMap(n=>list.filter(p=>p.floor===n).sort(byNo));
+  const q2=s=>'"'+String(s).replace(/"/g,'""').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'"';
+  const foot='<headerFooter><oddFooter>&amp;L© 合同会社mokume　無断複製・再配布禁止&amp;R&amp;P/&amp;N</oddFooter></headerFooter>';
+  const NS='xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const listSheet=(H,W,rowsXml,last,lc,sel)=>`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet ${NS}><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${lc}${Math.max(last,2)}"/>
+<sheetViews><sheetView workbookViewId="0"${sel?' tabSelected="1"':''}><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="18"/><cols>${W.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols>
+<sheetData>${rowsXml.join('')}</sheetData>${last>1?`<autoFilter ref="A1:${lc}${last}"/>`:''}
+<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>${foot}</worksheet>`;
+  const sheets=[];
+  /* スペース */
+  let spLast=1;
+  if(sp.length){const H=['フロア','番号','種類別番号','タイプ','名称','部署名','席数','WP','メモ'],W=[12,7,11,16,18,16,7,7,30];
+    const rows=[row(1,H.map((h,i)=>cell(1,i,h,ST.head)),22)];let r=1;
+    for(const p of sorted(sp)){r++;rows.push(row(r,[cell(r,0,p.floor,ST.text),cell(r,1,+p.no,ST.num),cell(r,2,p.tno,ST.num),cell(r,3,p.type,ST.text),cell(r,4,p.name,ST.text),
+      cell(r,5,p.dept,ST.text),cell(r,6,+p.cap>=1?+p.cap:'',ST.num),cell(r,7,noWp(p)?'':+p.wp,ST.num),cell(r,8,p.memo,ST.text)]))}
+    spLast=r;sheets.push({name:'スペース',xml:listSheet(H,W,rows,r,'I')})}
+  /* 収納量 */
+  let stLast=1;
+  if(st.length){const H=['フロア','番号','種類別番号','タイプ','名称','部署名','段数','幅(m)','収納量(fm)','メモ'],W=[12,7,11,14,16,16,7,8,11,30];
+    const rows=[row(1,H.map((h,i)=>cell(1,i,h,ST.head)),22)];let r=1;
+    for(const p of sorted(st)){r++;const lv=+p.levels>0?+p.levels:'',wd=+p.width>0?+p.width:'';
+      rows.push(row(r,[cell(r,0,p.floor,ST.text),cell(r,1,+p.no,ST.num),cell(r,2,p.tno,ST.num),cell(r,3,p.type,ST.text),cell(r,4,p.name,ST.text),cell(r,5,p.dept,ST.text),
+        cell(r,6,lv,ST.num),cell(r,7,wd,ST.num),`<c r="I${r}" s="${ST.fm}"><f>IF(AND(ISNUMBER(G${r}),ISNUMBER(H${r})),G${r}*H${r},0)</f><v>${fmOf(p)}</v></c>`,cell(r,9,p.memo,ST.text)]))}
+    stLast=r;sheets.push({name:'収納量',xml:listSheet(H,W,rows,r,'J')})}
+  /* 集計 */
+  const S2=[row(1,[cell(1,0,'数量集計',ST.title)],24)];let r2=1;
+  const blank=()=>{r2++;S2.push(row(r2,[]))};
+  const put=(cells,ht)=>{r2++;S2.push(row(r2,cells.map(c=>typeof c==='function'?c(r2):c),ht))};
+  const numC=(col,v,f,style)=>r=>`<c r="${col}${r}" s="${style}"><f>${f}</f><v>${v}</v></c>`;
+  /* vals: [{lbl,col(一覧シートの列),valOf,style,sumStyle}] → 集計シートのD列以降 */
+  const section=(title,list,sheet,last,vals,typeKind)=>{
+    blank();put([cell(r2+1,0,title,ST.label)]);
+    put(['フロア','タイプ','数量',...vals.map(v=>v.lbl)].map((h,i)=>cell(r2+1,i,h,ST.head)),22);
+    const A=`${sheet}!$A$2:$A$${last}`,C=`${sheet}!$D$2:$D$${last}`,V=v=>`${sheet}!$${v.col}$2:$${v.col}$${last}`,OC='DEFGH';
+    const vc=(ps,crit,sum)=>vals.map((v,i)=>numC(OC[i],v.valOf(ps),crit===null?`SUM(${V(v)})`:`SUMIFS(${V(v)}${crit})`,sum?v.sumStyle:v.style));
+    const typeNames=[...typesOf(typeKind).map(t=>t.k),...new Set(list.map(p=>p.type))].filter((n,i,a)=>a.indexOf(n)===i);
+    for(const fl of floorsOf(list)){const ps=list.filter(p=>p.floor===fl);
+      for(const t of typeNames){const tp=ps.filter(p=>p.type===t);if(!tp.length)continue;
+        put([cell(r2+1,0,fl,ST.text),cell(r2+1,1,t,ST.text),numC('C',tp.length,`COUNTIFS(${A},${q2(fl)},${C},${q2(t)})`,ST.num),...vc(tp,`,${A},${q2(fl)},${C},${q2(t)}`)])}
+      put([cell(r2+1,0,fl,ST.label),cell(r2+1,1,'小計',ST.label),numC('C',ps.length,`COUNTIFS(${A},${q2(fl)})`,ST.num),...vc(ps,`,${A},${q2(fl)}`,true)])}
+    if(floorsOf(list).length>1)for(const t of typeNames){const tp=list.filter(p=>p.type===t);if(!tp.length)continue;
+      put([cell(r2+1,0,'全フロア',ST.text),cell(r2+1,1,t,ST.text),numC('C',tp.length,`COUNTIFS(${C},${q2(t)})`,ST.num),...vc(tp,`,${C},${q2(t)}`)])}
+    put([cell(r2+1,0,'全フロア',ST.label),cell(r2+1,1,'合計',ST.label),numC('C',list.length,`COUNTA(${sheet}!$B$2:$B$${last})`,ST.num),...vc(list,null,true)]);
+  };
+  if(sp.length)section('スペース',sp,'スペース',spLast,[{lbl:'席数計',col:'G',valOf:ps=>ps.reduce((s,p)=>s+(+p.cap||0),0),style:ST.num,sumStyle:ST.num},
+    {lbl:'WP計',col:'H',valOf:ps=>ps.reduce((s,p)=>s+(+p.wp||0),0),style:ST.num,sumStyle:ST.num}],'occ');
+  if(st.length)section('収納量',st,'収納量',stLast,[{lbl:'収納量(fm)',col:'I',valOf:ps=>Math.round(ps.reduce((s,p)=>s+fmOf(p),0)*100)/100,style:ST.fm,sumStyle:ST.fmSum}],'stor');
+  blank();
+  if(st.length)put([cell(r2+1,0,'収納量(fm)＝段数×幅(m)。ファイリングメーター（書類を並べられる長さ）の合計です。',ST.wrap)]);
+  put([cell(r2+1,0,'© 合同会社mokume　無断複製・再配布禁止',ST.wrap)]);
+  sheets.unshift({name:'集計',xml:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet ${NS}><sheetViews><sheetView workbookViewId="0" tabSelected="1"/></sheetViews><sheetFormatPr defaultRowHeight="18"/>
+<cols><col min="1" max="1" width="14" customWidth="1"/><col min="2" max="2" width="18" customWidth="1"/><col min="3" max="3" width="9" customWidth="1"/><col min="4" max="5" width="13" customWidth="1"/></cols>
+<sheetData>${S2.join('')}</sheetData>
+<pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait"/>${foot}</worksheet>`});
+  const T='application/vnd.openxmlformats-officedocument.spreadsheetml',RT='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const files=[
+    {name:'[Content_Types].xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="${T}.sheet.main+xml"/>${sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="${T}.worksheet+xml"/>`).join('')}<Override PartName="/xl/styles.xml" ContentType="${T}.styles+xml"/></Types>`},
+    {name:'_rels/.rels',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${RT}/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {name:'xl/workbook.xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook ${NS}><bookViews><workbookView activeTab="0"/></bookViews><sheets>${sheets.map((s,i)=>`<sheet name="${s.name}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets><definedNames>${sheets.map((s,i)=>i&&s.name!=='集計'?`<definedName name="_xlnm.Print_Titles" localSheetId="${i}">${s.name}!$1:$1</definedName>`:'').join('')}</definedNames><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="${RT}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="${RT}/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/styles.xml',data:X.styles},...sheets.map((s,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:s.xml}))];
+  try{const bytes=await X.zip(files);
+    const ok=await saveFile(`SPACE-COUNTER_数量集計_${stamp()}.xlsx`,new Blob([bytes],{type:T+'.sheet'}));
+    toast(ok?`Excelを出力しました（スペース ${sp.length} 箇所・${sp.reduce((s,p)=>s+(+p.wp||0),0)} WP／収納 ${st.length} 台・${fmt1(st.reduce((s,p)=>s+fmOf(p),0))} fm）`:'この画面ではダウンロードできません。ローカルのHTMLから出力してください')}
+  catch(err){toast('Excelを作成できませんでした：'+(err&&err.message||err))}
+};
+$('bPng').onclick=()=>openPng(false);
+
+/* ---------- 選択肢の編集（スペースタイプ・部署） ---------- */
+const usedType=k=>S.floors.reduce((n,f)=>n+f.points.filter(p=>p.type===k).length,0);
+const usedDept=d=>S.floors.reduce((n,f)=>n+f.points.filter(p=>p.dept===d).length,0);
+function openOptions(focus){
+  const m=document.createElement('div');m.className='modal';
+  m.innerHTML=`<div class="sv opt" role="dialog" aria-label="選択肢の編集">
+    <div class="sv-h"><b>選択肢の編集</b><button id="oX" aria-label="閉じる">×</button></div>
+    <fieldset id="oTypeFs"><legend>${S.kind==='stor'?'収納什器（収納量モード）':'スペースタイプ（スペースモード）'}</legend>
+      <div class="muted sm">名前・記号を変えると、そのタイプのプロットにもすべて反映されます。${S.kind==='stor'?'':'WP既定を入れると、そのタイプのプロットのWPがその値になります（空欄は「席数1なら1」）。'}記号は種類別番号（A-1など）に使います。使用中のタイプは削除できません。${S.kind==='stor'?'段数・幅の既定値を変えると、そのタイプのプロットにも反映されます（空欄のタイプは1台ずつ入力）。':''}もう一方の種別は、作業モードを切り替えてから編集します。</div>
+      <div class="ol" id="oTypes"></div>
+      <div class="flex"><button id="oAddType">＋ タイプを追加</button><button id="oResetType" title="既定のタイプに戻します（使用中のタイプは残ります）">既定に戻す</button></div>
+    </fieldset>
+    <fieldset id="oDeptFs"><legend>部署</legend>
+      <div class="ol" id="oDepts"></div>
+      <div class="flex"><button id="oAddDept">＋ 部署を追加</button></div>
+      <label class="sm muted" for="oBulk">まとめて追加（1行に1部署。Excelの列をそのまま貼り付けできます）</label>
+      <textarea id="oBulk" rows="3" placeholder="営業部&#10;企画部&#10;総務部"></textarea>
+      <div class="flex"><button id="oBulkAdd">まとめて追加</button></div>
+    </fieldset>
+    <div class="flex" style="justify-content:flex-end"><button class="primary" id="oDone">閉じる</button></div></div>`;
+  document.body.appendChild(m);const q=x=>m.querySelector(x);
+  const done=()=>{m.remove();renderAll();persist()};
+  const ub=(n)=>n?`<span class="use">${n}件</span>`:'<span class="use muted">未使用</span>';
+  const KD=S.kind,idxs=()=>S.types.map((t,i)=>tKind(t)===KD?i:-1).filter(i=>i>=0);
+  const drawTypes=()=>{const ix=idxs();q('#oTypes').innerHTML=ix.map((i,j)=>{const t=S.types[i],n=usedType(t.k);return`<div class="orow t" data-i="${i}">
+      <input type="color" value="${t.c}" aria-label="色" data-f="c">
+      <input type="text" class="cd" value="${esc(t.code||'')}" aria-label="記号" title="種類別番号の記号（例：A → A-1, A-2…）" maxlength="4" data-f="code">
+      <input type="text" value="${esc(t.k)}" aria-label="タイプ名" data-f="k">
+      ${KD==='stor'?`<label class="ck sm" title="空欄にすると、1台ずつ入力します">段数<input type="number" min="1" step="1" style="width:56px" data-f="levels" value="${t.levels??''}"></label>
+      <label class="ck sm" title="空欄にすると、1台ずつ入力します">幅(m)<input type="number" min="0" step="0.1" style="width:64px" data-f="width" value="${t.width??''}"></label>`
+      :`<label class="ck sm" title="このタイプで追加したとき、席数に1を自動で入れます"><input type="checkbox" data-f="def1" ${t.def1?'checked':''}>席数1を自動</label>
+      <label class="ck sm" title="このタイプのWPの既定値。空欄なら、席数1のとき1が入ります">WP既定<input type="number" min="0" step="1" style="width:56px" data-f="wpDef" value="${t.wpDef??''}" placeholder="自動"></label>`}
+      ${ub(n)}
+      <span class="mv"><button data-a="up" aria-label="上へ" ${j?'':'disabled'}>↑</button><button data-a="down" aria-label="下へ" ${j<ix.length-1?'':'disabled'}>↓</button>
+      <button data-a="del" aria-label="削除" ${n||ix.length<2?'disabled':''} title="${n?n+'件で使用中のため削除できません':'削除'}">×</button></span></div>`}).join('')};
+  const drawDepts=()=>{q('#oDepts').innerHTML=S.depts.length?S.depts.map((d,i)=>{const n=usedDept(d);return`<div class="orow d" data-i="${i}">
+      <input type="text" value="${esc(d)}" aria-label="部署名" data-f="k">${ub(n)}
+      <span class="mv"><button data-a="up" aria-label="上へ" ${i?'':'disabled'}>↑</button><button data-a="down" aria-label="下へ" ${i<S.depts.length-1?'':'disabled'}>↓</button>
+      <button data-a="del" aria-label="削除" title="${n?'削除すると、'+n+'件のプロットの部署名が空になります':'削除'}">×</button></span></div>`}).join(''):'<div class="muted sm">部署はまだありません。下のボタンか、まとめて追加で登録してください。</div>'};
+  const sync=()=>{persist();renderAll()};
+  drawTypes();drawDepts();
+  // スペースタイプ
+  q('#oTypes').addEventListener('change',e=>{const row=e.target.closest('.orow');if(!row)return;const t=S.types[+row.dataset.i],f=e.target.dataset.f;
+    if(f==='c'){t.c=e.target.value}
+    else if(f==='code'){const v=e.target.value.trim().toUpperCase();
+      if(!v||S.types.some(x=>x!==t&&x.code===v)){toast(v?'同じ記号のタイプがあります（スペース・収納量で共通）':'記号を入力してください');e.target.value=t.code||'';return}t.code=v;e.target.value=v}
+    else if(f==='wpDef'){const v=e.target.value===''?'':+e.target.value;if(v!==''&&!(v>=0)){toast('0以上の数を入力してください');e.target.value=t.wpDef??'';return}t.wpDef=v;
+      if(v!=='')for(const fl of S.floors)for(const p of fl.points)if(kindOf(p)==='occ'&&p.type===t.k)p.wp=v}
+    else if(f==='levels'||f==='width'){const v=e.target.value===''?'':+e.target.value;if(v!==''&&!(v>0)){toast('0より大きい数を入力してください');e.target.value=t[f]??'';return}t[f]=v;
+      if(v!=='')for(const fl of S.floors)for(const p of fl.points)if(p.type===t.k)p[f]=v}
+    else if(f==='multi'||f==='def1'){t[f]=e.target.checked;if(f==='def1'&&t.def1)for(const fl of S.floors)for(const p of fl.points)if(p.type===t.k&&noCap(p)){p.cap=1;autoWp(p)}}
+    else if(f==='k'){const v=e.target.value.trim();
+      if(!v||S.types.some(x=>x!==t&&x.k===v)){toast(v?'同じ名前のタイプがあります':'名前を入力してください');e.target.value=t.k;return}
+      const old=t.k;t.k=v;for(const fl of S.floors)for(const p of fl.points)if(p.type===old)p.type=v;if(S.type===old)S.type=v;if(focusType===old)focusType=v}
+    sync();});
+  q('#oTypes').addEventListener('input',e=>{if(e.target.dataset.f==='c'){S.types[+e.target.closest('.orow').dataset.i].c=e.target.value;renderMarks();renderOptions();renderStats();renderList()}});
+  q('#oTypes').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b)return;const i=+b.closest('.orow').dataset.i,a=S.types;
+    const ix=idxs(),j=ix.indexOf(i);
+    if(b.dataset.a==='up'&&j>0){const k=ix[j-1];[a[k],a[i]]=[a[i],a[k]]}
+    if(b.dataset.a==='down'&&j<ix.length-1){const k=ix[j+1];[a[k],a[i]]=[a[i],a[k]]}
+    if(b.dataset.a==='del'&&!usedType(a[i].k)&&ix.length>1){a.splice(i,1);if(!tOf(S.type))S.type=typesOf(S.kind)[0].k}
+    drawTypes();sync()});
+  q('#oAddType').onclick=()=>{let n=1,k='新しいタイプ';while(tOf(k))k='新しいタイプ'+(++n);const usedC=new Set(S.types.map(t=>t.code));let code=[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].find(ch=>!usedC.has(ch));if(!code){let i=1;while(usedC.has('Z'+i))i++;code='Z'+i}S.types.push(KD==='stor'?{k,code,c:PALETTE[S.types.length%PALETTE.length],kind:'stor',levels:'',width:''}:{k,code,c:PALETTE[S.types.length%PALETTE.length],kind:'occ',multi:false,def1:false});drawTypes();sync();
+    const ins=q('#oTypes').querySelectorAll('input[data-f="k"]');const last=ins[ins.length-1];last.focus();last.select()};
+  q('#oResetType').onclick=()=>{const other=S.types.filter(t=>tKind(t)!==KD),keep=S.types.filter(t=>tKind(t)===KD&&usedType(t.k)&&!DEFAULT_TYPES.some(d=>d.k===t.k));S.types=[...other,...DEFAULT_TYPES.filter(d=>d.kind===KD).map(t=>({...t})),...keep.map(t=>({...t,code:''}))];migrate();if(KD==='stor')for(const fl of S.floors)for(const p of fl.points)applyTypeDims(p,true);drawTypes();sync();toast('既定のタイプに戻しました')};
+  // 部署
+  q('#oDepts').addEventListener('change',e=>{const row=e.target.closest('.orow');if(!row)return;const i=+row.dataset.i,old=S.depts[i],v=e.target.value.trim();
+    if(!v||S.depts.some((x,j)=>j!==i&&x===v)){toast(v?'同じ名前の部署があります':'名前を入力してください');e.target.value=old;return}
+    S.depts[i]=v;for(const fl of S.floors)for(const p of fl.points)if(p.dept===old)p.dept=v;sync()});
+  q('#oDepts').addEventListener('click',e=>{const b=e.target.closest('button[data-a]');if(!b)return;const i=+b.closest('.orow').dataset.i,a=S.depts;
+    if(b.dataset.a==='up'&&i>0)[a[i-1],a[i]]=[a[i],a[i-1]];
+    if(b.dataset.a==='down'&&i<a.length-1)[a[i+1],a[i]]=[a[i],a[i+1]];
+    if(b.dataset.a==='del'){const n=usedDept(a[i]);
+      if(n&&b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='削除?';b.classList.add('danger');setTimeout(()=>{if(b.isConnected){b.dataset.arm='';b.textContent='×';b.classList.remove('danger')}},3000);return}
+      for(const fl of S.floors)for(const p of fl.points)if(p.dept===a[i])p.dept='';a.splice(i,1)}
+    drawDepts();sync()});
+  q('#oAddDept').onclick=()=>{let n=1,k='新しい部署';while(S.depts.includes(k))k='新しい部署'+(++n);S.depts.push(k);drawDepts();sync();
+    const ins=q('#oDepts').querySelectorAll('input[data-f="k"]');const last=ins[ins.length-1];last.focus();last.select()};
+  q('#oBulkAdd').onclick=()=>{const add=q('#oBulk').value.split(/\r?\n|\t/).map(x=>x.trim()).filter(Boolean).filter((x,i,a)=>a.indexOf(x)===i&&!S.depts.includes(x));
+    S.depts.push(...add);q('#oBulk').value='';drawDepts();sync();toast(add.length?`${add.length} 部署を追加しました`:'追加できる部署がありませんでした（重複は除きます）')};
+  q('#oX').onclick=done;q('#oDone').onclick=done;m.addEventListener('click',e=>{if(e.target===m)done()});
+  (focus==='dept'?q('#oDeptFs'):q('#oTypeFs')).scrollIntoView({block:'start'});
+}
+$('bOpts').onclick=()=>openOptions('type');
+
+/* ---------- 見本から自動で探す ---------- */
+/* 流れ：見本を囲む(sample) → 探す範囲を選ぶ(ready/area) → 探す(busy) → 候補を確認(result) → プロット
+   候補は画面上の仮の表示で、保存しない。「○件をプロット」で通常のプロットになる */
+const AU={key:'',phase:'sample',box:null,area:null,cands:[],face:-1,active:[]};
+const auLayer=$('autoLayer');
+const auKey=()=>{const f=F();return f?f.id+':'+f.img.length:''};
+function auSync(){const k=auKey();if(AU.key===k)return;AU.key=k;AU.box=null;AU.area=null;AU.cands=[];AU.face=-1;AU.phase='sample'}
+const auThr=()=>S.auto.thr/100;
+/* 図面の明るさ（0〜1）。フロアごとに1回だけ作る */
+let grayCache={key:'',g:null};
+async function grayOf(f){const k=auKey();if(grayCache.key===k)return grayCache.g;
+  const im=await new Promise((ok,ng)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ng;i.src=f.img});
+  const c=document.createElement('canvas');c.width=f.w;c.height=f.h;const g=c.getContext('2d',{willReadFrequently:true});
+  g.fillStyle='#fff';g.fillRect(0,0,f.w,f.h);g.drawImage(im,0,0,f.w,f.h);
+  const d=g.getImageData(0,0,f.w,f.h).data,out=new Float32Array(f.w*f.h);
+  for(let i=0;i<out.length;i++)out[i]=(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2])/255;
+  grayCache={key:k,g:out};return out}
+/* 探す処理は裏で動かす（画面が固まらないように）。使えない環境ではその場で計算する */
+let worker=null,workerFail=false;
+function runDetect(g,W,H,box,opt){return new Promise((ok,ng)=>{
+  const local=()=>setTimeout(()=>{try{ok(Matcher.detect(g,W,H,box,opt))}catch(e){ng(e)}},30);
+  if(workerFail)return local();
+  try{if(!worker){const src=$('matcherSrc').textContent+'\nonmessage=e=>{const d=e.data;try{postMessage({ok:Matcher.detect(d.g,d.W,d.H,d.box,d.opt)})}catch(err){postMessage({err:String(err&&err.message||err)})}};';
+      worker=new Worker(URL.createObjectURL(new Blob([src],{type:'text/javascript'})))}
+    worker.onmessage=e=>e.data.err?ng(new Error(e.data.err)):ok(e.data.ok);
+    worker.onerror=e=>{e.preventDefault&&e.preventDefault();workerFail=true;worker=null;local()};
+    worker.postMessage({g,W,H,box,opt})}
+  catch(e){workerFail=true;worker=null;local()}})}
+async function auSearch(){const f=F();if(!f||!AU.box)return;AU.phase='busy';renderAuto();
+  try{const g=await grayOf(f),r=await runDetect(g,f.w,f.h,AU.box,{area:AU.area,floor:0.5});
+    if(AU.key!==auKey())return;
+    AU.face=r.face;AU.cands=r.cands.map(c=>({...c,off:false}));AU.phase='result';
+    const n=auList().filter(c=>!c.dup).length;toast(n?`候補が ${n} 件見つかりました。確認してからプロットしてください`:'候補が見つかりませんでした。右の「似ている度合い」を下げてみてください')}
+  catch(err){AU.phase='ready';toast('探せませんでした：'+(err&&err.message||err))}
+  renderAuto()}
+/* しきい値以上の候補（既存のプロットと重なるものには印を付ける） */
+function auList(){const f=F(),thr=auThr(),ex=f.points.filter(p=>kindOf(p)===S.kind).map(p=>({x:p.x*f.w,y:p.y*f.h}));
+  return AU.cands.filter(c=>c.man||c.score>=thr).map(c=>{const r=0.5*Math.min(c.w,c.h);c.dup=ex.some(e=>(e.x-c.x)**2+(e.y-c.y)**2<r*r);return c})}
+/* 番号の振り順 */
+const DIRS=[[1,0],[0,1],[-1,0],[0,-1]];
+/* 見本の前の向き face を、候補の向き o（0〜3：回転、4〜7：反転＋回転）に合わせて回す */
+function faceVec(face,o){let[x,y]=DIRS[face];if(o>3)x=-x;for(let k=0;k<(o&3);k++)[x,y]=[-y,x];return[x,y]}
+/* key の値が tol 以内で続くものを1つの帯（行・列）にまとめる */
+function bands(list,key,tol){const s=[...list].sort((a,b)=>key(a)-key(b)),out=[];let cur=null,st=0;
+  for(const p of s){if(!cur||key(p)-st>tol){cur=[];out.push(cur);st=key(p)}cur.push(p)}return out}
+/* 島に分ける：椅子の前（机側）に少しずらした点どうしが近いものを同じ島とみなす。
+   机をはさんで向かい合う席は近づき、通路をはさんで背中合わせの席は離れる */
+function islands(list,sz,face){
+  const n=list.length,fv=list.map(c=>face<0||c.man?null:faceVec(face,c.o));
+  const pt=list.map((c,i)=>{const v=fv[i];if(!v)return{x:c.x,y:c.y};const d=(v[0]?c.w:c.h)*0.9;return{x:c.x+v[0]*d,y:c.y+v[1]*d}});
+  /* 目安の間隔：同じ向きの候補どうしの最短距離（中央値） */
+  const nn=[];
+  for(let i=0;i<n;i++){let b=Infinity;
+    for(let j=0;j<n;j++){if(i===j)continue;if(fv[i]&&fv[j]&&(fv[i][0]!==fv[j][0]||fv[i][1]!==fv[j][1]))continue;const d=Math.hypot(list[i].x-list[j].x,list[i].y-list[j].y);if(d<b)b=d}
+    if(b<Infinity)nn.push(b)}
+  nn.sort((a,b)=>a-b);const T=Math.max(sz*1.2,(nn.length?nn[nn.length>>1]:sz*2)*1.3);
+  const par=list.map((_,i)=>i),root=i=>{while(par[i]!==i)i=par[i]=par[par[i]];return i};
+  for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(Math.hypot(pt[i].x-pt[j].x,pt[i].y-pt[j].y)<T)par[root(i)]=root(j);
+  const g=new Map();list.forEach((c,i)=>{const r=root(i);if(!g.has(r))g.set(r,[]);g.get(r).push(c)});
+  return[...g.values()].map(ps=>({ps,x0:Math.min(...ps.map(p=>p.x)),y0:Math.min(...ps.map(p=>p.y)),x1:Math.max(...ps.map(p=>p.x)),y1:Math.max(...ps.map(p=>p.y))}))}
+function auOrder(list){
+  if(!list.length)return[];
+  const sz=Math.min(AU.box.w,AU.box.h),tol=sz*0.5;
+  const rows=ps=>bands(ps,p=>p.y,tol).flatMap(b=>b.sort((a,c)=>a.x-c.x));
+  const cols=ps=>bands(ps,p=>p.x,tol).flatMap(b=>b.sort((a,c)=>a.y-c.y));
+  if(S.auto.order==='row')return rows(list);
+  if(S.auto.order==='col')return cols(list);
+  /* 島ごと：島は左上から行ごと、島の中は島の長い向きに沿って並べる */
+  const isl=islands(list,sz,AU.face),hs=isl.map(g=>g.y1-g.y0).sort((a,b)=>a-b),bt=Math.max(tol,hs[hs.length>>1]*0.5);
+  return bands(isl,g=>g.y0,bt).flatMap(b=>b.sort((a,c)=>a.x0-c.x0)).flatMap(g=>g.x1-g.x0>=g.y1-g.y0?rows(g.ps):cols(g.ps))}
+function autoHint(){return{
+  sample:`【自動検出】見本にする${S.kind==='stor'?'什器':'席（椅子）'}を1つ、ドラッグで囲む ／ ホイールで拡大縮小 ／ ホイールを押したまま画面移動`,
+  ready:'【自動検出】右の欄で「フロア全体を探す」か「範囲を囲んで探す」を選ぶ',
+  area:'【自動検出】探す範囲をドラッグで囲む（Escでやめる）',
+  busy:'【自動検出】探しています…',
+  result:'【自動検出】候補をクリックで外す・戻す ／ 何もない所をクリックで候補を足す ／ ドラッグで画面移動 ／ 右の欄でプロット'}[AU.phase]}
+/* 図面上の表示（見本・範囲・候補） */
+function renderAutoLayer(){
+  const on=S.mode==='auto',f=F();let h='';AU.active=[];
+  if(on&&f){
+    if(AU.box)h+=`<div class="sbox" style="left:${AU.box.x}px;top:${AU.box.y}px;width:${AU.box.w}px;height:${AU.box.h}px"></div>`;
+    if(AU.area&&AU.phase!=='area')h+=`<div class="sbox area" style="left:${AU.area.x}px;top:${AU.area.y}px;width:${AU.area.w}px;height:${AU.area.h}px"></div>`;
+    if(AU.phase==='result'){
+      const list=auList(),act=auOrder(list.filter(c=>!c.off&&!c.dup)),no0=nextNo(f),thr=auThr(),c0=color(S.type),sq=S.kind==='stor';
+      const t0=f.points.filter(p=>kindOf(p)===S.kind&&p.type===S.type).length,num=new Map(act.map((c,i)=>[c,S.numMode==='type'?`${codeOf(S.type)}-${t0+i+1}`:no0+i]));
+      AU.active=act;
+      for(const c of list){if(c.dup)continue;
+        const cls='cand'+(sq?' sq':'')+(c.off?' off':'')+(!c.off&&!c.man&&c.score<thr+0.05?' weak':'')+(c.man?' man':'');
+        const tip=(c.man?'手で足した候補':`見本との一致度 ${Math.round(c.score*100)}%`)+`　クリックで${c.off?'戻す':c.man?'消す':'外す'}`;
+        h+=`<div class="${cls}" data-ci="${AU.cands.indexOf(c)}" style="left:${c.x}px;top:${c.y}px;--c:${c0}"><i style="width:${c.w}px;height:${c.h}px"></i><b title="${tip}">${c.off?'×':esc(num.get(c))}</b></div>`}}}
+  auLayer.innerHTML=h;
+  $('busy').hidden=!(on&&AU.phase==='busy');
+  vp.classList.toggle('sel',S.mode==='sel'||(on&&!['sample','area'].includes(AU.phase)));
+}
+function auCounts(){const list=auList();return{n:AU.active.length,off:list.filter(c=>c.off&&!c.dup).length,dup:list.filter(c=>c.dup).length}}
+/* 右の欄 */
+function renderAutoPanel(){
+  const el=$('secAuto'),on=S.mode==='auto';el.hidden=!on;$('secEdit').hidden=on;if(!on)return;
+  const f=F(),ph=AU.phase,what=S.kind==='stor'?'什器':'席（椅子）';
+  const step=(i,st,t,body)=>`<div class="au-step ${st}"><i>${st==='done'?'✓':i}</i><div><b>${t}</b>${body?`<div class="muted sm">${body}</div>`:''}</div></div>`;
+  const st=i=>{const cur={sample:1,ready:2,area:2,busy:3,result:3}[ph];return i<cur?'done':i===cur?'on':''};
+  let h='<h2>見本から自動で探す</h2>';
+  if(!f){el.innerHTML=h+'<div class="muted">図面を追加してください。</div>';return}
+  h+=step(1,st(1),'見本を1つ囲む',ph==='sample'?`図面上で、見本にする${what}を<b>1つだけ</b>ドラッグで囲んでください。周りの線を入れずにぴったり囲むと、見つかりやすくなります。`:'');
+  if(AU.box)h+=`<div class="au-thumb"><canvas id="auThumb"></canvas><div class="muted sm">付けるタイプ：<b style="color:${color(S.type)}">${esc(S.type)}</b><br>（左のパレットで変えられます）</div></div>`;
+  h+=step(2,st(2),'探す範囲を選ぶ',ph==='area'?'探す範囲を図面上でドラッグして囲んでください。執務エリアだけを囲むと、関係ない候補が減ります。':'');
+  if(ph==='ready')h+=`<div class="au-btns"><button class="primary" id="auAll" title="フロア全体から、見本に似たものを探します">フロア全体を探す</button><button id="auArea" title="図面上で範囲を囲んで、その中だけを探します">範囲を囲んで探す</button><button id="auRedo" title="見本を囲み直します">見本を選び直す</button></div>`;
+  if(ph==='area')h+=`<div class="au-btns"><button id="auCancel">やめる（Esc）</button></div>`;
+  h+=step(3,st(3),'候補を確認してプロット',ph==='busy'?'探しています…（大きい図面では数秒かかります）':'');
+  if(ph==='result'){const c=auCounts(),no0=nextNo(f);
+    h+=`<div class="au-count"><b id="auN">${c.n}</b><span>件をプロットします</span></div>
+      <div class="muted sm" id="auSub">${auSubText(c)}</div>
+      <label class="sl" title="見本とどれくらい似ていれば候補にするか。下げると候補が増え、上げると減ります"><span>似ている度合い</span><input type="range" id="auThr" min="50" max="99" step="1" value="${S.auto.thr}"><output id="auThrV">${S.auto.thr}%</output></label>
+      <div class="row" style="grid-template-columns:88px 1fr"><span>番号の振り方</span><select id="auOrder" title="プロットするときの番号の順番"><option value="island">島ごと</option><option value="row">左上から行ごと</option><option value="col">左上から列ごと</option></select></div>
+      <label class="ck sm" title="プロットの図形・数字の向きを、見つけたものの向きに合わせます（見本の向きを基準にします）"><input type="checkbox" id="auRot" ${S.auto.rot[S.kind]?'checked':''}>プロットの向きも合わせる</label>
+      <div class="au-btns"><button class="primary" id="auGo" ${c.n?'':'disabled'} title="候補を通常のプロットにします。取り消し（Ctrl+Z）で一度に戻せます">${c.n} 件をプロット</button>
+        <button id="auArea" title="範囲を囲んで探し直します">範囲を囲んで探し直す</button><button id="auRedo" title="候補を消して、見本を囲み直します">見本を選び直す</button></div>
+      <div class="au-tip">番号は <b>${S.numMode==='type'?esc(codeOf(S.type))+'-'+(f.points.filter(p=>kindOf(p)===S.kind&&p.type===S.type).length+1):no0+' 番'}</b> から振ります。<br>
+        <span class="au-key"></span>候補　<span class="au-key w"></span>見本との差が大きめ（確認してください）<br>
+        候補をクリックすると外す・戻す、何もない所をクリックすると候補を足せます。すでにプロットがある所は候補から除きます。</div>`}
+  el.innerHTML=h;
+  const o=$('auOrder');if(o)o.value=S.auto.order;
+  const cv=$('auThumb');if(cv&&AU.box&&img.complete){const b=AU.box,k=Math.min(4,120/b.w,96/b.h);cv.width=Math.max(1,Math.round(b.w*k));cv.height=Math.max(1,Math.round(b.h*k));
+    const g=cv.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(img,b.x,b.y,b.w,b.h,0,0,cv.width,cv.height)}
+}
+function auSubText(c){return[c.off?`外した ${c.off} 件`:'',c.dup?`既存のプロットと重なる ${c.dup} 件は除外`:''].filter(Boolean).join('・')||'候補をクリックすると外せます'}
+function renderAuto(){auSync();renderAutoLayer();renderAutoPanel();renderHint()}
+/* しきい値・並べ方を変えたとき（右の欄は作り直さず、数だけ更新する） */
+function auUpdateCounts(){renderAutoLayer();const c=auCounts();if(!$('auN'))return;
+  $('auN').textContent=c.n;$('auSub').textContent=auSubText(c);const b=$('auGo');b.textContent=`${c.n} 件をプロット`;b.disabled=!c.n}
+$('secAuto').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.id==='auAll'){AU.area=null;auSearch()}
+  if(b.id==='auArea'){AU.phase='area';AU.cands=[];renderAuto()}
+  if(b.id==='auCancel'){AU.phase=AU.box?'ready':'sample';renderAuto()}
+  if(b.id==='auRedo'){AU.box=null;AU.area=null;AU.cands=[];AU.phase='sample';renderAuto()}
+  if(b.id==='auGo')auCommit()});
+let auRaf=0;
+$('secAuto').addEventListener('input',e=>{if(e.target.id!=='auThr')return;S.auto.thr=+e.target.value;$('auThrV').textContent=S.auto.thr+'%';
+  cancelAnimationFrame(auRaf);auRaf=requestAnimationFrame(auUpdateCounts);persist()});
+$('secAuto').addEventListener('change',e=>{
+  if(e.target.id==='auOrder'){S.auto.order=e.target.value;auUpdateCounts();persist()}
+  if(e.target.id==='auRot'){S.auto.rot[S.kind]=e.target.checked;persist()}});
+/* 図面上で囲んだ枠（見本・探す範囲） */
+function autoBox(d,e){
+  if(!d.moved){toast('ドラッグで囲んでください');return}
+  const f=F(),a=toImg({clientX:Math.min(d.sx,e.clientX),clientY:Math.min(d.sy,e.clientY)}),b=toImg({clientX:Math.max(d.sx,e.clientX),clientY:Math.max(d.sy,e.clientY)});
+  const x=Math.max(0,a.x*f.w),y=Math.max(0,a.y*f.h),r={x,y,w:Math.min(f.w,b.x*f.w)-x,h:Math.min(f.h,b.y*f.h)-y};
+  if(AU.phase==='sample'){
+    if(r.w<4||r.h<4){toast('小さすぎます。図面を拡大してから囲んでください');return}
+    if(r.w>f.w*0.2||r.h>f.h*0.2){toast(`大きすぎます。${S.kind==='stor'?'什器':'席（椅子）'}を1つだけ囲んでください`);return}
+    AU.box=r;AU.cands=[];AU.phase='ready';renderAuto();return}
+  if(r.w<AU.box.w||r.h<AU.box.h){toast('範囲が見本より小さいです。もう少し大きく囲んでください');return}
+  AU.area=r;auSearch()}
+/* 候補のクリック：外す・戻す／何もない所なら候補を足す */
+function autoClick(d,e){
+  if(AU.phase!=='result')return;
+  if(d.ci!==null){const c=AU.cands[d.ci];if(!c)return;if(c.man)AU.cands.splice(d.ci,1);else c.off=!c.off;renderAutoLayer();auUpdateCounts();return}
+  const f=F(),q=toImg(e);if(q.x<0||q.y<0||q.x>1||q.y>1)return;
+  AU.cands.push({x:q.x*f.w,y:q.y*f.h,w:AU.box.w,h:AU.box.h,o:0,rot:0,score:1,man:true,off:false});auUpdateCounts()}
+/* 確定：候補を通常のプロットにする（取り消し1回で全部戻せる） */
+function auCommit(){
+  const f=F(),act=AU.active;if(!f||!act.length){toast('プロットする候補がありません');return}
+  snap();if(!visible({kind:S.kind}))S.view='all';
+  const rotOn=!!S.auto.rot[S.kind],cl=v=>Math.min(1,Math.max(0,v));let no=nextNo(f);
+  for(const c of act){
+    const p=S.kind==='stor'?{id:uid(),kind:'stor',no:no++,type:S.type,name:'',dept:'',levels:'',width:'',rot:0,memo:'',x:cl(c.x/f.w),y:cl(c.y/f.h)}
+      :{id:uid(),kind:'occ',no:no++,type:S.type,name:'',dept:'',cap:defCap(S.type),wp:'',rot:0,memo:'',x:cl(c.x/f.w),y:cl(c.y/f.h)};
+    if(rotOn)p.rot=c.rot||0;
+    applyTypeDims(p,true);autoWp(p);f.points.push(p)}
+  const n=act.length;AU.cands=[];AU.area=null;AU.phase='ready';sel=null;msel.clear();refresh();renderAuto();
+  toast(`${n} 件をプロットしました（取り消しで一度に戻せます）`)}
+
+/* ---------- 起動 ---------- */
+load();applyPin();applyView();renderAll(true);
+new ResizeObserver(()=>{if(F()&&!drag)fit()}).observe(vp);
+})();
+</script>
+
+</body></html>
