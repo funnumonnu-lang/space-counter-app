@@ -1905,8 +1905,9 @@ function auCommit(){
       :{id:uid(),kind:'occ',no:no++,type:S.type,name:'',dept:'',cap:defCap(S.type),wp:'',rot:0,memo:'',x:cl(c.x/f.w),y:cl(c.y/f.h)};
     if(rotOn)p.rot=c.rot||0;
     applyTypeDims(p,true);autoWp(p);f.points.push(p)}
-  const n=act.length;AU.cands=[];AU.area=null;AU.phase='ready';sel=null;msel.clear();refresh();renderAuto();
-  toast(`${n} 件をプロットしました（取り消しで一度に戻せます）`)}
+  /* プロットしたら見本も消して、次の見本を囲める状態に戻す */
+  const n=act.length;AU.cands=[];AU.area=null;AU.box=null;AU.phase='sample';sel=null;msel.clear();refresh();renderAuto();
+  toast(`${n} 件をプロットしました（取り消しで一度に戻せます）。続けて探すときは、次の見本を囲んでください`)}
 
 /* ---------- 起動 ---------- */
 load();applyPin();applyView();renderAll(true);
