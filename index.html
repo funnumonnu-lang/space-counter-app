@@ -359,6 +359,10 @@ header .adv{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8p
 .ar-tbl tr{cursor:default}
 .ar-tbl{font-size:11.5px}.ar-tbl td{padding:4px 2px;white-space:nowrap}.ar-tbl td:nth-child(n+2){width:auto;padding-left:6px}.ar-tbl td:nth-child(6){text-align:right;font-family:var(--font-num)}
 .ar.furn{fill:#2a9da8;fill-opacity:.3;stroke:#2a9da8;stroke-dasharray:6 4}
+.ar.outline{fill:#1d2740;fill-opacity:.04;stroke:#1d2740;stroke-width:3.5;stroke-dasharray:12 5}
+.ar.outline.on{fill-opacity:.1;stroke-width:5}
+.al.outline{border-color:#1d2740;border-width:2px}.al.outline i{color:#1d2740}
+.pk-mode{display:grid;grid-template-columns:1fr 1fr}.pk-mode button{justify-content:center}
 .ar.nofurn{fill:#6b7280;fill-opacity:.12;stroke:#6b7280;stroke-dasharray:3 4}
 .ar-svg .fov{pointer-events:none;image-rendering:pixelated}
 .al em{font-style:normal;color:#1f7f88}.al em.fw,.fw{color:var(--danger)!important;font-weight:700}
@@ -838,7 +842,62 @@ function pick(rgb, W, H, x, y, opt = {}) {
   const poly = simplify(trace(R, W, H), opt.eps ?? 1.2);
   return { ok: true, leak, px, poly, mask: R, seed };
 }
-return { pick, morph };
+// 図面の外側の余白から広げ、届かなかった所のうち、いちばん大きいかたまりを建物とみなして外形を拾う
+function outline(rgb, W, H, opt = {}) {
+  const st = opt.stride || 3, tol = opt.tol ?? 0.18, thin = Math.max(0, Math.round(opt.thin ?? 0)), gap = Math.max(0, Math.round(opt.gap ?? 0)), fill = Math.max(0, Math.round(opt.fill ?? 0)), N = W * H;
+  // 余白の色：図面の縁でいちばん多い色
+  const hist = new Map(), q = i => { const o = i * st; return (rgb[o] >> 3) << 10 | (rgb[o + 1] >> 3) << 5 | (rgb[o + 2] >> 3); };
+  const border = []; for (let x = 0; x < W; x++) border.push(x, (H - 1) * W + x); for (let y = 0; y < H; y++) border.push(y * W, y * W + W - 1);
+  // 余白の色：外側としてクリックした所の色。なければ、縁から少し内側の帯でいちばん多い色（いちばん外の1pxは枠のことがあるので使わない）
+  const sd = opt.seeds || [];
+  if (sd.length) for (const i0 of sd) { const x0 = i0 % W, y0 = i0 / W | 0; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const x = x0 + dx, y = y0 + dy; if (x >= 0 && y >= 0 && x < W && y < H) { const k = q(y * W + x); hist.set(k, (hist.get(k) || 0) + 1); } } }
+  else { const t = Math.max(3, Math.round(Math.min(W, H) * 0.03));
+    for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) { if (x > t && y > t && x < W - 1 - t && y < H - 1 - t) continue; if (x < 2 || y < 2 || x > W - 3 || y > H - 3) continue; const k = q(y * W + x); hist.set(k, (hist.get(k) || 0) + 1); } }
+  let bq = 0, bc = -1; for (const [k, c] of hist) if (c > bc) { bc = c; bq = k; }
+  const bg = [((bq >> 10) & 31) * 8 + 4, ((bq >> 5) & 31) * 8 + 4, (bq & 31) * 8 + 4].map(v => v / 255);
+  const D = new Uint8Array(N);
+  for (let i = 0; i < N; i++) { const o = i * st, a = rgb[o] / 255 - bg[0], b = rgb[o + 1] / 255 - bg[1], c = rgb[o + 2] / 255 - bg[2]; D[i] = a * a + b * b + c * c > tol * tol ? 1 : 0; }
+  let B = thin > 0 ? morph(morph(D, W, H, thin, false), W, H, thin, true) : D;
+  if (gap > 0) B = morph(morph(B, W, H, gap, true), W, H, gap, false);
+  // 外側：図面の縁と、外側としてクリックした所から、境目でない所をたどる
+  const O = new Uint8Array(N), stk = [], N4 = (i, x) => [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i - W, i + W];
+  const spread = () => { while (stk.length) { const i = stk.pop(), x = i % W; for (const j of N4(i, x)) if (j >= 0 && j < N && !O[j] && !B[j]) { O[j] = 1; stk.push(j); } } };
+  // クリックした所が線や点の上なら、近く（6px以内）の余白を使う
+  const near = i => { if (!B[i]) return i; const x0 = i % W, y0 = i / W | 0;
+    for (let r = 1; r <= 6; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const x = x0 + dx, y = y0 + dy; if (x >= 0 && y >= 0 && x < W && y < H && !B[y * W + x]) return y * W + x; } return -1; };
+  for (const i of [...border, ...(opt.seeds || []).map(near)]) if (i >= 0 && i < N && !B[i] && !O[i]) { O[i] = 1; stk.push(i); }
+  spread();
+  // 外側に届かなかった所のうち、いちばん大きいかたまり（寸法線・通り芯などの細い出っ張りは削る）
+  const r0 = Math.max(1, thin);
+  const largest = () => { let I = new Uint8Array(N); for (let i = 0; i < N; i++) I[i] = O[i] ? 0 : 1;
+    I = morph(morph(I, W, H, r0, false, 0), W, H, r0, true);
+    const lab = new Int32Array(N); let best = 0, bestN = 0, L = 0;
+    for (let i0 = 0; i0 < N; i0++) { if (!I[i0] || lab[i0]) continue; L++; let n = 0; const s2 = [i0]; lab[i0] = L;
+      while (s2.length) { const i = s2.pop(), x = i % W; n++;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { if (!dx && !dy) continue; const xx = x + dx, j = i + dy * W + dx; if (xx < 0 || xx >= W || j < 0 || j >= N || !I[j] || lab[j]) continue; lab[j] = L; s2.push(j); } }
+      if (n > bestN) { bestN = n; best = L; } }
+    const R = new Uint8Array(N); for (let i = 0; i < N; i++) R[i] = best && lab[i] === best ? 1 : 0; return { R, n: bestN }; };
+  let { R, n: cnt } = largest();
+  if (!cnt) return { ok: false, reason: '外周を拾えませんでした' };
+  // 中の穴を埋める（外側としてたどった所は、寸法線などに囲まれていても埋め戻さない）
+  { const ext = new Uint8Array(N), q2 = [];
+    for (let i = 0; i < N; i++) if (!R[i] && (O[i] || i < W || i >= N - W || i % W === 0 || i % W === W - 1)) { ext[i] = 1; q2.push(i); }
+    while (q2.length) { const i = q2.pop(), x = i % W; for (const j of N4(i, x)) if (j >= 0 && j < N && !ext[j] && !R[j]) { ext[j] = 1; q2.push(j); } }
+    for (let i = 0; i < N; i++) R[i] = ext[i] ? 0 : 1; }
+  if (fill > 0) R = closePad(R, W, H, fill);
+  let px = 0; for (let i = 0; i < N; i++) px += R[i];
+  const poly = simplify(trace(R, W, H), opt.eps ?? 1.2);
+  return { ok: true, leak: false, small: px < N * 0.05, big: px > N * 0.95, px, poly, mask: R };
+}
+// 図面の周りに余白を足してから、広げて縮める（へこみを埋める）
+function closePad(R, W, H, fill) {
+  const p = fill + 1, W2 = W + 2 * p, H2 = H + 2 * p, M = new Uint8Array(W2 * H2);
+  for (let yy = 0; yy < H; yy++) M.set(R.subarray(yy * W, yy * W + W), (yy + p) * W2 + p);
+  const C = morph(morph(M, W2, H2, fill, true), W2, H2, fill, false, 0);
+  for (let yy = 0; yy < H; yy++) R.set(C.subarray((yy + p) * W2 + p, (yy + p) * W2 + p + W), yy * W);
+  return fillHoles(R, W, H);
+}
+return { pick, outline, morph, trace, simplify, fillHoles };
 })();
 if (typeof module !== 'undefined') module.exports = Room;
 </script>
@@ -1141,12 +1200,12 @@ function migrate(){
   if(!Array.isArray(S.depts))S.depts=[];
   if(!['occ','stor','area'].includes(S.kind))S.kind='occ';if(!['all','occ','stor','area'].includes(S.view))S.view='all';
   if(!['rect','poly','pick','calib'].includes(S.atool))S.atool='rect';
-  S.pick=Object.assign({tol:18,thin:0,gap:0,fill:0},S.pick&&typeof S.pick==='object'?S.pick:{});
+  S.pick=Object.assign({tol:18,thin:0,gap:0,fill:0,mode:'room'},S.pick&&typeof S.pick==='object'?S.pick:{});
   S.furn=Object.assign({tol:18,min:10,limit:55,show:false},S.furn&&typeof S.furn==='object'?S.furn:{});if(S.kind==='area'&&S.mode==='auto')S.mode='add';
   {const ac=typesOf('area');for(const f of S.floors){if(!Array.isArray(f.areas))f.areas=[];if(f.calib&&!(+f.calib.mm>0))f.calib=null;
     f.areas=f.areas.filter(a=>a&&Array.isArray(a.pts)&&a.pts.length>=3);
     for(const a of f.areas){if(!a.id)a.id=uid();if(!tOf(a.cat)||tKind(tOf(a.cat))!=='area'){if(a.cat&&!tOf(a.cat)){S.types.push({k:a.cat,code:'',c:PALETTE[S.types.length%PALETTE.length],kind:'area'})}else a.cat=(ac[0]||{}).k}
-      if(!['add','ded','furn','nofurn'].includes(a.role))a.role=a.sign===-1?'ded':'add';a.sign=a.role==='ded'?-1:a.role==='add'?1:0;if(a.name==null)a.name='';if(a.memo==null)a.memo=''}}}
+      if(!['add','ded','furn','nofurn','outline'].includes(a.role))a.role=a.sign===-1?'ded':'add';a.sign=a.role==='ded'?-1:a.role==='add'?1:0;if(a.name==null)a.name='';if(a.memo==null)a.memo=''}}}
   if(!S.typeBy||typeof S.typeBy!=='object')S.typeBy={};
   if(!['add','sel','auto'].includes(S.mode))S.mode='add';
   S.auto=Object.assign({thr:80,order:'island'},S.auto&&typeof S.auto==='object'?S.auto:{});
@@ -1646,7 +1705,7 @@ function drawPng(f,im,o,filt){
     return{kd,items,head,n:ps.length}}).filter(gp=>gp.n);
   if((filt==='all'||filt==='area')&&(f.areas||[]).length){const st=areaStats(f);
     groups.push({kd:'area',n:f.areas.length,head:`面積：${st.m?fmtA(st.total.m2)+' ㎡':'縮尺未設定'}・席数 ${st.total.cap}・1席あたり ${fmtA(ratio(st.total.m2,st.total.cap))} ㎡・1WPあたり ${fmtA(ratio(st.total.m2,st.total.wp))} ㎡・家具占有率 ${fmtP(st.total.fr)}`,
-      items:st.cats.map(c=>({t:c.t,sq:true,txt:`${c.t.k} ${st.m?fmtA(c.m2)+'㎡':''}（${c.cap}席・${fmtA(ratio(c.m2,c.cap))}㎡/席・家具${fmtP(c.fr)}）`}))})}
+      items:[...(st.outline?[{t:{k:'外周',c:'#1d2740'},sq:true,txt:`外周 ${st.m?fmtA(st.outline.m2)+'㎡':''}（${st.outline.cap}席・${fmtA(ratio(st.outline.m2,st.outline.cap))}㎡/席）`}]:[]),...st.cats.map(c=>({t:c.t,sq:true,txt:`${c.t.k} ${st.m?fmtA(c.m2)+'㎡':''}（${c.cap}席・${fmtA(ratio(c.m2,c.cap))}㎡/席・家具${fmtP(c.fr)}）`}))]})}
   const maxW=f.w-pad*2;let rows=0;
   g.font=`${Math.round(lr*1.05)}px ${FF}`;
   for(const gp of groups){let rowW=0;rows+=2;for(const it of gp.items){it.w=lr*1.6+g.measureText(it.txt).width+lr*1.6;if(rowW+it.w>maxW&&rowW>0){rows++;rowW=0}rowW+=it.w}}
@@ -1827,7 +1886,7 @@ $('bXlsx').onclick=async()=>{
     const rows=[row(1,H.map((h,i)=>cell(1,i,h,ST.head)),22)];let r=1;const nv=v=>v==null?'':Math.round(v*100)/100;
     const fx=(col,num,den,v)=>`<c r="${col}${r}" s="${ST.fm}"><f>IF(AND(ISNUMBER(${num}${r}),N(${den}${r})&gt;0),${num}${r}/${den}${r},"")</f>${v==null?'':`<v>${v}</v>`}</c>`;
     for(const f of arF){const a2=AST.get(f.id);
-      for(const rw of[...a2.rows.values()].sort((x,y)=>(+x.a.no||0)-(+y.a.no||0))){r++;const a=rw.a,ded=rw.ro!=='add';
+      for(const rw of[...a2.rows.values()].sort((x,y)=>(+x.a.no||0)-(+y.a.no||0))){r++;const a=rw.a,ded=rw.ro!=='add'&&rw.ro!=='outline';
         rows.push(row(r,[cell(r,0,f.name,ST.text),cell(r,1,+a.no,ST.num),cell(r,2,rw.label,ST.num),cell(r,3,a.cat,ST.text),cell(r,4,a.name,ST.text),cell(r,5,ROLE_LABEL[rw.ro],ST.num),
           cell(r,6,nv(rw.m2),ST.fm),cell(r,7,ded?'':nv(rw.net),ST.fm),cell(r,8,ded?'':rw.cap,ST.num),cell(r,9,ded?'':rw.wp,ST.num),
           fx('K','H','I',ded?null:nv(ratio(rw.net,rw.cap))),fx('L','H','J',ded?null:nv(ratio(rw.net,rw.wp))),
@@ -1862,9 +1921,10 @@ $('bXlsx').onclick=async()=>{
     const line=(fl,lbl,c,bold)=>put([cell(r2+1,0,fl,bold?ST.label:ST.text),cell(r2+1,1,lbl,bold?ST.label:ST.text),cell(r2+1,2,nv(c.m2),bold?ST.fmSum:ST.fm),cell(r2+1,3,c.cap,ST.num),cell(r2+1,4,c.wp,ST.num),rt('F','D'),rt('G','E'),cell(r2+1,7,c.fr==null?'':Math.round(c.fr*1000)/10,bold?ST.fmSum:ST.fm)]);
     const tot={m2:0,cap:0,wp:0,fw:0,fm:0},byCat=new Map();let anyM=false;
     for(const f of arF){const a2=AST.get(f.id);for(const c of a2.cats){line(f.name,c.t.k,c);const b=byCat.get(c.t.k)||{m2:null,cap:0,wp:0};if(c.m2!=null)b.m2=(b.m2||0)+c.m2;b.cap+=c.cap;b.wp+=c.wp;if(c.fr!=null&&c.m2!=null){b.fw=(b.fw||0)+c.fr*c.m2;b.fm=(b.fm||0)+c.m2}byCat.set(c.t.k,b)}
-      line(f.name,'小計',a2.total,true);if(a2.total.m2!=null){tot.m2+=a2.total.m2;anyM=true}tot.cap+=a2.total.cap;tot.wp+=a2.total.wp;if(a2.total.fr!=null&&a2.total.m2!=null){tot.fw+=a2.total.fr*a2.total.m2;tot.fm+=a2.total.m2}}
+      line(f.name,'小計',a2.total,true);if(a2.outline){line(f.name,'外周（フロア全体）',a2.outline,true);if(a2.outline.m2!=null){tot.om=(tot.om||0)+a2.outline.m2}tot.oc=(tot.oc||0)+a2.outline.cap;tot.ow=(tot.ow||0)+a2.outline.wp;tot.on=1}if(a2.total.m2!=null){tot.m2+=a2.total.m2;anyM=true}tot.cap+=a2.total.cap;tot.wp+=a2.total.wp;if(a2.total.fr!=null&&a2.total.m2!=null){tot.fw+=a2.total.fr*a2.total.m2;tot.fm+=a2.total.m2}}
     if(arF.length>1)for(const[k,b]of byCat)line('全フロア',k,{...b,fr:b.fm?b.fw/b.fm:null});
-    line('全フロア','合計',{m2:anyM?tot.m2:null,cap:tot.cap,wp:tot.wp,fr:tot.fm?tot.fw/tot.fm:null},true)}
+    line('全フロア','合計',{m2:anyM?tot.m2:null,cap:tot.cap,wp:tot.wp,fr:tot.fm?tot.fw/tot.fm:null},true);
+    if(tot.on)line('全フロア','外周（フロア全体）',{m2:tot.om==null?null:tot.om,cap:tot.oc,wp:tot.ow,fr:null},true)}
   blank();
   if(arF.length)put([cell(r2+1,0,'1席あたり面積＝エリアの面積（中の控除を差し引いた面積）÷ エリアの中にある席数。席はスペースのプロットの位置で数えます。家具占有率＝家具の面積 ÷ エリアの面積（図面で線に囲まれた机・椅子・収納などを家具とみなして推定）。',ST.wrap)]);
   if(st.length)put([cell(r2+1,0,'収納量(fm)＝段数×幅(m)。ファイリングメーター（書類を並べられる長さ）の合計です。',ST.wrap)]);
@@ -1998,21 +2058,25 @@ const ratio=(a,n)=>a!=null&&n>0?a/n:null;
 const clamp01=v=>Math.min(1,Math.max(0,v));
 /* エリアの区分：add＝加算、ded＝控除、furn＝家具（推定から漏れた家具を手で足す）、nofurn＝除外（家具と誤って数えた所を手で外す） */
 const roleOf=a=>a.role||(a.sign===-1?'ded':'add');
-const ROLE_LABEL={add:'加算',ded:'控除',furn:'家具',nofurn:'除外'};
+const ROLE_LABEL={add:'加算',ded:'控除',furn:'家具',nofurn:'除外',outline:'外周'};
 const fmtP=v=>v==null||!isFinite(v)?'–':(Math.round(v*1000)/10).toFixed(1)+'%';
 const overLimit=v=>v!=null&&v*100>S.furn.limit;
 /* エリアごと・カテゴリごと・フロアの集計 */
 function areaStats(f){
   const m=mPerPx(f),k2=m?m*m:null,occ=f.points.filter(p=>kindOf(p)==='occ'),seq={},rows=new Map();
   const sum=(ps,k)=>ps.reduce((s,p)=>s+(+p[k]||0),0);
-  for(const a of[...(f.areas||[])].sort((x,y)=>(+x.no||0)-(+y.no||0))){const ro=roleOf(a),sk=ro==='furn'||ro==='nofurn'?'#'+ro:a.cat;seq[sk]=(seq[sk]||0)+1;
+  for(const a of[...(f.areas||[])].sort((x,y)=>(+x.no||0)-(+y.no||0))){const ro=roleOf(a),sk=ro==='furn'||ro==='nofurn'||ro==='outline'?'#'+ro:a.cat;seq[sk]=(seq[sk]||0)+1;
     const P=toPx(f,a.pts),px=polyArea(P);
     rows.set(a.id,{a,ro,P,px,m2:k2?px*k2:null,net:k2?px*k2:null,c:polyCenter(P),seats:[],host:null,subs:[],cap:0,wp:0,fu:null,
-      label:ro==='furn'?`家具${seq[sk]}`:ro==='nofurn'?`除外${seq[sk]}`:`${codeOf(a.cat)}-${seq[sk]}`})}
-  const all=[...rows.values()],adds=all.filter(r=>r.ro==='add'),deds=all.filter(r=>r.ro==='ded'),fx=all.filter(r=>r.ro==='furn'||r.ro==='nofurn');
+      label:ro==='furn'?`家具${seq[sk]}`:ro==='nofurn'?`除外${seq[sk]}`:ro==='outline'?`外周${seq[sk]}`:`${codeOf(a.cat)}-${seq[sk]}`})}
+  const all=[...rows.values()],adds=all.filter(r=>r.ro==='add'),deds=all.filter(r=>r.ro==='ded'),fx=all.filter(r=>r.ro==='furn'||r.ro==='nofurn'),outs=all.filter(r=>r.ro==='outline');
   /* 控除・家具・除外は、重心が入っている加算エリア（いちばん小さいもの）に付ける */
   for(const d of[...deds,...fx]){d.host=adds.filter(r=>inPoly(d.c.x,d.c.y,r.P)).sort((x,y)=>x.px-y.px)[0]||null;if(d.host)d.host.subs.push(d)}
+  /* 外周：中の控除はすべて外周の面積から差し引き、中の席はすべて数える（カテゴリの合計とは別に出す） */
+  for(const o of outs){const X=o.P.map(p=>p.x),Y=o.P.map(p=>p.y),x0=Math.min(...X),y0=Math.min(...Y);o.c={x:x0+(Math.max(...X)-x0)*.08,y:y0+(Math.max(...Y)-y0)*.05};o.seats=occ.filter(p=>inPoly(p.x*f.w,p.y*f.h,o.P));o.cap=sum(o.seats,'cap');o.wp=sum(o.seats,'wp');if(k2)for(const d of deds)if(inPoly(d.c.x,d.c.y,o.P))o.net-=d.m2}
   for(const d of deds)if(d.host&&k2)d.host.net-=d.m2;
+  const oIds=new Set(outs.flatMap(o=>o.seats.map(p=>p.id))),oPs=occ.filter(p=>oIds.has(p.id));
+  const outline=outs.length?{m2:k2?outs.reduce((s,o)=>s+o.net,0):null,cap:sum(oPs,'cap'),wp:sum(oPs,'wp'),n:outs.length}:null;
   for(const r of adds){r.seats=occ.filter(p=>inPoly(p.x*f.w,p.y*f.h,r.P));r.cap=sum(r.seats,'cap');r.wp=sum(r.seats,'wp');r.fu=furnOf(f,r);r.fr=r.fu&&r.fu.inside?r.fu.furn/r.fu.inside:null}
   const frate=list=>{const v=list.filter(r=>r.fu&&r.fu.inside);if(!v.length)return null;return v.reduce((s,r)=>s+r.fu.furn,0)/v.reduce((s,r)=>s+r.fu.inside,0)};
   const cats=[];
@@ -2021,7 +2085,7 @@ function areaStats(f){
     cats.push({t,n:ad.length,m2:k2?ad.reduce((s,r)=>s+r.net,0)-fr.reduce((s,r)=>s+r.m2,0):null,cap:sum(ps,'cap'),wp:sum(ps,'wp'),fr:frate(ad)})}
   const inIds=new Set(adds.flatMap(r=>r.seats.map(p=>p.id))),inside=occ.filter(p=>inIds.has(p.id)),out=occ.filter(p=>!inIds.has(p.id));
   return{m,rows,cats,total:{m2:k2?cats.reduce((s,c)=>s+c.m2,0):null,cap:sum(inside,'cap'),wp:sum(inside,'wp'),fr:frate(adds)},
-    pending:adds.some(r=>!r.fu),outside:adds.length?out.length:0,outsideCap:adds.length?sum(out,'cap'):0}}
+    outline,pending:adds.some(r=>!r.fu),outside:adds.length?out.length:0,outsideCap:adds.length?sum(out,'cap'):0}}
 /* ---- 家具占有率：エリアの中で、外周から床をたどれない所（線で囲まれた机・椅子・収納など）を家具とみなす ---- */
 const furnCache=new Map();let furnLoading='';
 const furnMinPx=f=>{const m=mPerPx(f);return m?Math.max(4,S.furn.min/100/(m*m)):Math.max(4,f.w*f.h*0.0001)};
@@ -2086,7 +2150,7 @@ function renderAreas(){
   const f=F();if(!f||!areaShown()){areaLayer.innerHTML='';return}
   const on=isArea(),st=areaStats(f),pt=p=>`${(p.x*f.w).toFixed(1)},${(p.y*f.h).toFixed(1)}`;
   let h=`<svg class="ar-svg" width="${f.w}" height="${f.h}" viewBox="0 0 ${f.w} ${f.h}"><defs><pattern id="arHatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="14" height="14" fill="rgba(255,255,255,.3)"/><line x1="0" y1="0" x2="0" y2="14" stroke="#b42318" stroke-width="3" stroke-opacity=".5"/></pattern></defs>`;
-  const rank={add:0,ded:1,furn:2,nofurn:2},order=[...st.rows.values()].sort((x,y)=>rank[x.ro]-rank[y.ro]||y.px-x.px);   /* 大きい加算エリアを下に */
+  const rank={outline:-1,add:0,ded:1,furn:2,nofurn:2},order=[...st.rows.values()].sort((x,y)=>rank[x.ro]-rank[y.ro]||y.px-x.px);   /* 外周・大きい加算エリアを下に */
   for(const r of order){const a=r.a;
     h+=`<polygon data-aid="${a.id}" class="ar${r.ro==='add'?'':' '+r.ro}${asel.has(a.id)?' on':''}${on?'':' other'}" style="--c:${color(a.cat)}" points="${r.P.map(p=>p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ')}"/>`}
   /* 家具とみなした所（選んだエリア、または「すべて表示」のとき） */
@@ -2099,11 +2163,12 @@ function renderAreas(){
     h+=r.P.map((p,i)=>{const q=r.P[(i+1)%n];return`<circle class="eh" data-aid="${r.a.id}" data-ei="${i}" cx="${(p.x+q.x)/2}" cy="${(p.y+q.y)/2}" style="--c:${c0}"><title>ドラッグで角を足す</title></circle>`}).join('')
       +r.P.map((p,i)=>`<circle class="vh" data-aid="${r.a.id}" data-vi="${i}" cx="${p.x}" cy="${p.y}" style="--c:${c0}"><title>ドラッグで角を動かす（Alt＋クリックで消す）</title></circle>`).join('')}}
   if(on&&apick&&apick.key===pickKey(f)&&apick.res.ok)h+=`<polygon class="pick${apick.res.leak?' leak':''}" points="${apick.res.poly.map(p=>p.x+','+p.y).join(' ')}"/>`;
-  if(on&&apick&&apick.key===pickKey(f))h+=`<circle class="pseed" cx="${apick.x}" cy="${apick.y}"/>`;
+  if(on&&apick&&apick.key===pickKey(f))h+=apick.ol?apick.seeds.map(i=>`<circle class="pseed" cx="${i%f.w}" cy="${Math.floor(i/f.w)}"/>`).join(''):`<circle class="pseed" cx="${apick.x}" cy="${apick.y}"/>`;
   h+=`<rect id="arRect" class="draft" x="0" y="0" width="0" height="0" visibility="hidden"/></svg>`;
   for(const r of order){const a=r.a,ro=r.ro;let lines;
     if(ro==='ded')lines=[st.m?`−${fmtA(r.m2)}㎡`:'縮尺未設定'];
     else if(ro==='furn'||ro==='nofurn')lines=[r.host?'':'エリアの外'];
+    else if(ro==='outline')lines=[st.m?`${fmtA(r.net)}㎡`:'縮尺未設定',r.cap?`${r.cap}席${st.m?'・'+fmtA(ratio(r.net,r.cap))+'㎡/席':''}`:'席なし'];
     else lines=[st.m?`${fmtA(r.net)}㎡`:'縮尺未設定',r.cap?`${r.cap}席${st.m?'・'+fmtA(ratio(r.net,r.cap))+'㎡/席':''}`:'席なし',
       r.fu?`<em class="${overLimit(r.fr)?'fw':''}">家具 ${fmtP(r.fr)}${overLimit(r.fr)?' 狭い':''}</em>`:'家具 計算中'];
     h+=`<div class="al ${ro}${on?'':' other'}" style="left:${r.c.x}px;top:${r.c.y}px;--c:${color(a.cat)}"><i>${ro==='ded'?'控除 ':''}${esc(r.label)}${a.name?' '+esc(a.name):''}</i>${lines.filter(Boolean).map(l=>`<span>${l}</span>`).join('')}</div>`}
@@ -2112,7 +2177,7 @@ function areaHint(){const f=F(),cal=f&&!f.calib&&S.atool!=='calib'?'　※先に
   if(S.mode==='sel')return(asel.size===1?'【面積】角の印をドラッグで角を動かす（Altで吸い付きなし）／ 辺の中ほどの印をドラッグで角を足す ／ Alt＋クリックで角を消す ／ ':'【面積】エリアをクリックで選択（Shiftで追加）／ ')+'ドラッグで移動 ／ 何もない所をドラッグで範囲選択 ／ Deleteで削除'+cal;
   return({rect:'【面積】ドラッグで四角形のエリアを描く ／ クリックでエリアを選択 ／ ホイールで拡大縮小・押したまま画面移動',
     poly:adraw?'【面積】クリックで角を追加（Shiftで水平・垂直）／ 最初の点・ダブルクリック・Enterで閉じる ／ Backspaceで1点戻す ／ Escでやめる':'【面積】クリックで多角形の角を置いていく ／ ドラッグで画面移動',
-    pick:apick?'【拾う】形を確かめて、右の欄の「この形でエリアにする」（Enter）／ 別の所をクリックで拾い直す ／ Escでやめる':'【拾う】部屋の床（家具のない所）をクリックすると、壁や線で囲まれた範囲を拾う ／ ドラッグで画面移動',
+    pick:S.pick.mode==='outline'?'【外周】建物の外側の余白をクリック ／ Shift＋クリックで外側を足す ／ 右の欄の「この形でエリアにする」（Enter）／ Escでやめる':apick?'【拾う】形を確かめて、右の欄の「この形でエリアにする」（Enter）／ 別の所をクリックで拾い直す ／ Escでやめる':'【拾う】部屋の床（家具のない所）をクリックすると、壁や線で囲まれた範囲を拾う ／ ドラッグで画面移動',
     calib:adraw?'【縮尺】長さが分かるもう1点をクリック（Shiftで水平・垂直）／ Escでやめる':'【縮尺】図面の寸法線など、長さが分かる2点を順にクリック'}[S.atool]||'')+cal}
 function setAtool(t){S.atool=t;adraw=null;apick=null;S.mode='add';renderAll();persist()}
 /* 右の欄（面積モード） */
@@ -2127,7 +2192,7 @@ function renderAreaEdit(){
   const c=f.calib,cal=`<div class="ar-cal${c?'':' miss'}"><b>縮尺</b><span>${c?`基準線 ${Math.round(c.mm).toLocaleString('ja-JP')} mm（1px ≒ ${(st.m*1000).toFixed(1)} mm）`:'未設定です。図面の寸法線など、長さが分かる所に基準線を引くと面積が出ます。'}</span>
     <div class="flex"><button data-a="cal" title="長さが分かる2点をクリックして縮尺を決めます">${c?'基準線を引き直す':'基準線を引く'}</button>${c?'<button data-a="calnum" title="基準線の長さ（mm）だけを直します">長さを直す</button>':''}</div></div>`;
   const catSel=(v,keep)=>`<select data-f="cat">${keep?'<option value="">（変更しない）</option>':''}${typesOf('area').map(t=>`<option value="${esc(t.k)}"${t.k===v?' selected':''}>${esc(t.k)}</option>`).join('')}<option value="__edit">＋ 選択肢を編集…</option></select>`;
-  const roleSeg=ro=>`<div class="row"><span>区分</span><div class="seg ar-role">${['add','ded','furn','nofurn'].map(k=>`<button data-r="${k}"${ro?` aria-pressed="${ro===k}"`:''} title="${{add:'面積に加えるエリア',ded:'柱・吹き抜け・シャフトなど、面積から差し引く',furn:'自動の推定から漏れた家具を囲んで、家具に足す',nofurn:'家具と誤って数えた所を囲んで、家具から外す'}[k]}">${ROLE_LABEL[k]}</button>`).join('')}</div></div>`;
+  const roleSeg=ro=>`<div class="row"><span>区分</span><div class="seg ar-role">${['add','ded','furn','nofurn','outline'].map(k=>`<button data-r="${k}"${ro?` aria-pressed="${ro===k}"`:''} title="${{add:'面積に加えるエリア',ded:'柱・吹き抜け・シャフトなど、面積から差し引く',furn:'自動の推定から漏れた家具を囲んで、家具に足す',nofurn:'家具と誤って数えた所を囲んで、家具から外す',outline:'フロア全体の外周（カテゴリの合計とは別に、外周面積と1席あたりを出す）'}[k]}">${ROLE_LABEL[k]}</button>`).join('')}</div></div>`;
   const fz=S.furn,m=st.m;
   const furnBox=`<div class="ar-cal"><b>家具占有率の推定</b><span class="muted sm">エリアの中で、線で囲まれた机・椅子・収納などを家具とみなして自動で計算します。ずれる所は、区分「家具」「除外」で囲んで直せます。</span>
     <label class="sl" title="床の色とどれくらい違う色を、線（家具の輪郭）とみなすか"><span>色の差の許容</span><input type="range" data-fz="tol" min="5" max="60" step="1" value="${fz.tol}"><output id="fzV_tol">${fz.tol}%</output></label>
@@ -2147,11 +2212,16 @@ function renderAreaEdit(){
       <div class="ar-nums" id="aNums"></div>
       <div class="row"><span>カテゴリ</span>${catSel('',true)}</div>
       ${roleSeg('')}
+      <div class="ar-cal"><b>図形の組み合わせ</b><span class="muted sm">基準：<b>${esc((st.rows.get(ids[0])||{}).label||'')}</b>（最初に選んだエリア）。結果は基準のカテゴリ・名称・区分を引き継ぎます。離れた形は別々のエリアに、中の穴は「控除」のエリアになります。</span>
+        <div class="flex"><button data-b="union" title="選んだエリアを1つにまとめます">合体</button><button data-b="diff" title="基準のエリアから、ほかのエリアを差し引きます">差し引き</button><button data-b="inter" title="選んだエリアが重なった部分だけを残します">重なり</button></div></div>
       <div class="flex"><button class="danger" data-a="del">選択した ${ids.length} 件を削除</button></div>`;
   updAreaNums(st)}
 function updAreaNums(st){const box=$('aNums');if(!box)return;const ids=[...asel];
   if(ids.length===1){const r=st.rows.get(ids[0]);if(!r)return;const hostTxt=r.host?`${esc(r.host.label)}${r.host.a.name?'（'+esc(r.host.a.name)+'）':''}`:'';
     if(r.ro==='ded'){box.innerHTML=`<div><span>面積</span><b>${fmtA(r.m2)} ㎡</b></div><div class="muted sm">${r.host?`${hostTxt} から差し引きます`:'どの加算エリアにも入っていないため、カテゴリの合計から差し引きます'}</div>`;return}
+    if(r.ro==='outline'){box.innerHTML=`<div><span>外周面積</span><b>${fmtA(r.net)} ㎡</b>${st.m&&r.net!==r.m2?`<small>（囲んだ面積 ${fmtA(r.m2)}㎡ − 中の控除）</small>`:''}</div>
+      <div><span>中の席</span><b>${r.cap} 席・${r.wp} WP</b></div><div><span>1席あたり</span><b>${fmtA(ratio(r.net,r.cap))} ㎡</b></div><div><span>1WPあたり</span><b>${fmtA(ratio(r.net,r.wp))} ㎡</b></div>
+      <div class="muted sm">外周はカテゴリの合計には入れず、フロア全体の値として別に出します。</div>`;return}
     if(r.ro==='furn'||r.ro==='nofurn'){box.innerHTML=`<div><span>面積</span><b>${fmtA(r.m2)} ㎡</b></div><div class="muted sm">${r.host?`${hostTxt} の家具占有率で、この範囲を${r.ro==='furn'?'家具として数えます':'家具から外します'}`:'どの加算エリアにも入っていないため、効果がありません'}</div>`;return}
     const ow=overLimit(r.fr);
     box.innerHTML=`<div><span>面積</span><b>${fmtA(r.net)} ㎡</b>${st.m&&r.net!==r.m2?`<small>（囲んだ面積 ${fmtA(r.m2)}㎡ − 控除）</small>`:''}</div>
@@ -2166,7 +2236,7 @@ function areaTable(st){
   if(!st.cats.length)return'<div class="muted sm">このフロアにはまだエリアがありません。</div>';
   const fp=c=>`<td class="${overLimit(c.fr)?'fw':''}">${c.fr==null?'–':Math.round(c.fr*100)+'%'}</td>`;
   const tr=(lbl,c,cls)=>`<tr${cls?` class="${cls}"`:''}><td>${lbl}</td><td>${fmtA(c.m2)}</td><td>${c.cap}</td><td>${fmtA(ratio(c.m2,c.cap))}</td><td>${fmtA(ratio(c.m2,c.wp))}</td>${fp(c)}</tr>`;
-  return`<h2>このフロアの1席あたり面積・家具占有率</h2><table class="stats ar-tbl"><tr><td class="lbl">カテゴリ</td><td class="lbl">面積㎡</td><td class="lbl">席数</td><td class="lbl">㎡/席</td><td class="lbl">㎡/WP</td><td class="lbl">家具</td></tr>${st.cats.map(c=>tr(`<span class="dot" style="--c:${c.t.c}"></span>${esc(c.t.k)}`,c)).join('')}${tr('合計',st.total,'total')}</table>`
+  return`<h2>このフロアの1席あたり面積・家具占有率</h2><table class="stats ar-tbl"><tr><td class="lbl">カテゴリ</td><td class="lbl">面積㎡</td><td class="lbl">席数</td><td class="lbl">㎡/席</td><td class="lbl">㎡/WP</td><td class="lbl">家具</td></tr>${st.cats.map(c=>tr(`<span class="dot" style="--c:${c.t.c}"></span>${esc(c.t.k)}`,c)).join('')}${tr('合計',st.total,'total')}${st.outline?`<tr class="grand"><td>外周（フロア全体）</td><td>${fmtA(st.outline.m2)}</td><td>${st.outline.cap}</td><td>${fmtA(ratio(st.outline.m2,st.outline.cap))}</td><td>${fmtA(ratio(st.outline.m2,st.outline.wp))}</td><td></td></tr>`:''}</table>`
     +(st.outside?`<div class="muted sm">エリアの外にあるスペースのプロット：${st.outside} 箇所（${st.outsideCap} 席）は数えていません。</div>`:'')
     +(st.pending?'<div class="muted sm">家具占有率を計算しています…</div>':'')}
 /* パレット（面積モード）：カテゴリごとの面積と、フロアの1席あたり面積・家具占有率 */
@@ -2177,6 +2247,7 @@ function renderAreaPalStats(){
     c.title=`${c.dataset.k}：`+(ct?`${st.m?fmtA(ct.m2)+'㎡・':''}${ct.cap}席・1席あたり ${fmtA(ratio(ct.m2,ct.cap))}㎡・家具占有率 ${fmtP(ct.fr)}`:'エリアなし')+`（記号 ${codeOf(c.dataset.k)}）`});
   if(!el)return;if(!f){el.hidden=true;return}el.hidden=false;
   el.innerHTML=`<span class="h">このフロア（面積）</span><span>面積</span><b>${fmtA(st.total.m2)} ㎡</b><span>中の席数</span><b>${st.total.cap}</b><span>1席あたり</span><b>${fmtA(ratio(st.total.m2,st.total.cap))} ㎡</b><span>1WPあたり</span><b>${fmtA(ratio(st.total.m2,st.total.wp))} ㎡</b><span>家具占有率</span><b class="${overLimit(st.total.fr)?'fw':''}">${fmtP(st.total.fr)}</b>`
+    +(st.outline?`<span class="o">外周 ${fmtA(st.outline.m2)}㎡・${st.outline.cap}席・1席あたり ${fmtA(ratio(st.outline.m2,st.outline.cap))}㎡</span>`:'')
     +(f.calib?'':'<span class="o">縮尺が未設定です（面積は「–」）</span>')}
 /* ---- 操作 ---- */
 function areaDown(e){
@@ -2223,7 +2294,7 @@ function areaUp(e,d){
 function areaPoint(e){const f=F(),q0=toImg(e),q={x:clamp01(q0.x),y:clamp01(q0.y)},last=adraw&&adraw.pts[adraw.pts.length-1];
   if(last&&e.shiftKey){if(Math.abs(q.x-last.x)*f.w>Math.abs(q.y-last.y)*f.h)q.y=last.y;else q.x=last.x}return q}
 function areaClick(e){
-  if(S.atool==='pick'){const f=F(),q=toImg(e);if(q.x<0||q.y<0||q.x>1||q.y>1)return;pickAt(q.x*f.w,q.y*f.h);return}
+  if(S.atool==='pick'){const f=F(),q=toImg(e);if(q.x<0||q.y<0||q.x>1||q.y>1)return;pickAt(q.x*f.w,q.y*f.h,e.shiftKey);return}
   const f=F(),q=areaPoint(e),last=adraw&&adraw.pts[adraw.pts.length-1],scr=(a,b)=>Math.hypot((a.x-b.x)*f.w,(a.y-b.y)*f.h)*view.z;
   if(S.atool==='calib'){if(!adraw){adraw={pts:[q]};renderAreas();renderHint();return}const p1=adraw.pts[0];adraw=null;renderAreas();renderHint();calibDialog(p1,q);return}
   if(adraw&&adraw.pts.length>=3&&scr(q,adraw.pts[0])<10){finishPoly();return}
@@ -2234,8 +2305,8 @@ function areaHover(e){if(!adraw)return;const el=$('arDraft');if(!el)return;const
   el.setAttribute('points',[...adraw.pts,q].map(p=>`${(p.x*f.w).toFixed(1)},${(p.y*f.h).toFixed(1)}`).join(' '))}
 function finishPoly(){if(!adraw||adraw.pts.length<3){toast('角を3つ以上置いてください');return}const pts=adraw.pts;adraw=null;addArea(pts,'poly')}
 vp.addEventListener('dblclick',e=>{if(isArea()&&S.mode==='add'&&S.atool==='poly'&&adraw&&adraw.pts.length>=3){e.preventDefault();finishPoly()}});
-function addArea(pts,shape){const f=F();if(!f)return;snap();f.areas=f.areas||[];
-  const a={id:uid(),no:f.areas.reduce((m,x)=>Math.max(m,+x.no||0),0)+1,cat:S.type,name:'',sign:1,role:'add',shape,pts,memo:''};
+function addArea(pts,shape,role){const f=F();if(!f)return;snap();f.areas=f.areas||[];
+  const a={id:uid(),no:f.areas.reduce((m,x)=>Math.max(m,+x.no||0),0)+1,cat:S.type,name:'',sign:role&&role!=='add'?0:1,role:role||'add',shape,pts,memo:''};
   f.areas.push(a);asel=new Set([a.id]);refresh();if(!f.calib)toast('縮尺が未設定です。「縮尺」で基準線を引くと面積が出ます')}
 function delAreas(ids){const f=F();if(!f)return;const del=new Set(ids),n=(f.areas||[]).filter(a=>del.has(a.id)).length;if(!n)return;snap();
   f.areas=f.areas.filter(a=>!del.has(a.id));f.areas.sort((x,y)=>(+x.no||0)-(+y.no||0)).forEach((a,i)=>a.no=i+1);
@@ -2275,6 +2346,7 @@ function calibDialog(p1,p2){const f=F();if(!f)return;const px=Math.hypot((p2.x-p
   setTimeout(()=>q('#cbLen').focus(),0)}
 /* 右の欄の操作 */
 $('areaBody').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const f=F();if(!f)return;
+  if(b.dataset.b){areaBool(b.dataset.b);return}
   if(b.dataset.a==='cal'){setAtool('calib');return}
   if(b.dataset.a==='calnum'){const c=f.calib;if(c)calibDialog({x:c.x1,y:c.y1},{x:c.x2,y:c.y2});return}
   if(b.dataset.a==='clr'){asel.clear();refresh();return}
@@ -2294,43 +2366,56 @@ async function rgbaOf(f){const k=pickKey(f);if(rgbaCache.key===k)return rgbaCach
   const c=document.createElement('canvas');c.width=f.w;c.height=f.h;const g=c.getContext('2d',{willReadFrequently:true});
   g.fillStyle='#fff';g.fillRect(0,0,f.w,f.h);g.drawImage(im,0,0,f.w,f.h);
   rgbaCache={key:k,d:g.getImageData(0,0,f.w,f.h).data};return rgbaCache.d}
-async function pickAt(x,y){const f=F();if(!f)return;const seq=++pickSeq,big=f.w*f.h>4e6;
-  if(big)showBusy('部屋を拾っています…');
+async function pickAt(x,y,add){const f=F();if(!f)return;
+  if(S.pick.mode!=='outline')return runPick(f,x,y,null);
+  const i=Math.round(Math.min(f.h-1,Math.max(0,y)))*f.w+Math.round(Math.min(f.w-1,Math.max(0,x)));
+  runPick(f,x,y,add&&apick&&apick.ol&&apick.key===pickKey(f)?[...apick.seeds,i]:[i])}
+async function runPick(f,x,y,seeds){const seq=++pickSeq,big=f.w*f.h>4e6,ol=S.pick.mode==='outline';
+  if(big)showBusy(ol?'外周を拾っています…':'部屋を拾っています…');
   try{const d=await rgbaOf(f);await new Promise(r=>setTimeout(r,big?30:0));if(seq!==pickSeq)return;
-    const p=S.pick,res=Room.pick(d,f.w,f.h,x,y,{stride:4,tol:p.tol/100,thin:p.thin,gap:p.gap,fill:p.fill});
-    apick={key:pickKey(f),x,y,res}}
+    const p=S.pick,o={stride:4,tol:p.tol/100,thin:p.thin,gap:p.gap,fill:p.fill};
+    const res=ol?Room.outline(d,f.w,f.h,{...o,seeds:seeds||[]}):Room.pick(d,f.w,f.h,x,y,o);
+    apick={key:pickKey(f),x,y,ol,seeds:ol?(seeds||[]):null,res}}
   catch(err){toast('拾えませんでした：'+(err&&err.message||err))}
   finally{if(big)hideBusy()}
   renderAreas();renderAreaEdit();renderHint()}
+/* スライダーを動かしたとき：同じ所でもう一度拾う */
+function repick(){const f=F();if(!f)return;if(apick&&apick.key===pickKey(f))runPick(f,apick.x,apick.y,apick.seeds);else if(S.pick.mode==='outline')runPick(f,null,null,[])}
 function commitPick(){const f=F();if(!f||!apick||!apick.res.ok)return;
   const pts=apick.res.poly.map(p=>({x:clamp01(p.x/f.w),y:clamp01(p.y/f.h)}));if(pts.length<3){toast('形を拾えませんでした');return}
-  apick=null;addArea(pts,'pick')}
-function pickStatus(f){const m=mPerPx(f);if(!apick||apick.key!==pickKey(f))return{cls:'',html:'部屋の床（家具のない所）をクリックしてください。'};
+  const ol=apick.ol;apick=null;addArea(pts,'pick',ol?'outline':'add');if(ol)toast('外周をエリアにしました（区分「外周」。カテゴリの合計とは別に出します）')}
+function pickStatus(f){const m=mPerPx(f),ol=S.pick.mode==='outline';
+  if(!apick||apick.key!==pickKey(f))return{cls:'',html:ol?'建物の外側の余白をクリックしてください。':'部屋の床（家具のない所）をクリックしてください。'};
   const r=apick.res;if(!r.ok)return{cls:' warn',html:esc(r.reason)+'。少しずらしてクリックしてください。'};
-  return{cls:r.leak||r.px<f.w*f.h*0.002?' warn':'',html:`拾った面積 <b>${m?fmtA(r.px*m*m)+' ㎡':Math.round(r.px).toLocaleString('ja-JP')+' px'}</b>（角 ${r.poly.length}）`
+  const head=`${ol?'外周':'拾った面積'} <b>${m?fmtA(r.px*m*m)+' ㎡':Math.round(r.px).toLocaleString('ja-JP')+' px'}</b>（角 ${r.poly.length}）`;
+  if(ol)return{cls:r.big||r.small?' warn':'',html:head+(r.big?'<br>⚠ 図面のほぼ全体です。図面を囲む枠線を拾っていないか確かめてください。枠線がある場合は、枠線の内側で建物の外の余白をクリックします。':'')
+    +(r.small?'<br>⚠ とても小さい範囲です。建物の外側の余白をクリックしてください。':'')+'<br>寸法線などに囲まれて取り残された外側は、Shift＋クリックで外側として足せます。'};
+  return{cls:r.leak||r.px<f.w*f.h*0.002?' warn':'',html:head
     +(r.leak?'<br>⚠ 図面の端まで広がりました。部屋の外に漏れています。「隙間を閉じる」を上げるか、「色の差」を下げてください。':'')
     +(!r.leak&&r.px<f.w*f.h*0.002?'<br>⚠ とても小さい範囲です。机や家具の中をクリックしていないか確かめてください（床の部分をクリックします）。':'')}}
-function renderPickPanel(el,f){
-  if(el.dataset.key==='pick'&&$('pkSt')){updPick(f);return}
-  el.dataset.key='pick';const p=S.pick,m=mPerPx(f);
+function renderPickPanel(el,f){const ol=S.pick.mode==='outline';
+  if(el.dataset.key==='pick-'+S.pick.mode&&$('pkSt')){updPick(f);return}
+  el.dataset.key='pick-'+S.pick.mode;const p=S.pick,m=mPerPx(f);
   const sl=(k,lbl,min,max,tip)=>`<label class="sl" title="${tip}"><span>${lbl}</span><input type="range" data-pk="${k}" min="${min}" max="${max}" step="1" value="${p[k]}"><output id="pkV_${k}"></output></label>`;
   const c=f.calib;
-  el.innerHTML=`<div class="muted sm">部屋の床（家具のない所）をクリックすると、壁や線で囲まれた範囲を拾います。形を確かめて「この形でエリアにする」を押します。付けるカテゴリ：<b style="color:${color(S.type)}">${esc(S.type)}</b></div>
+  el.innerHTML=`<div class="seg pk-mode"><button data-pm="room" aria-pressed="${!ol}" title="部屋の床をクリックして、その部屋を拾う">部屋を拾う</button><button data-pm="outline" aria-pressed="${ol}" title="建物の外側をクリックして、フロア全体の外周を拾う">外周を拾う</button></div>
+    <div class="muted sm">${ol?'建物の外側の余白をクリックすると、そこから広げて建物の外形（外周）を拾います。取り残された外側は Shift＋クリックで足せます。外周は区分「外周」のエリアになり、カテゴリの合計とは別に「外周面積」「1席あたり」を出します。':`部屋の床（家具のない所）をクリックすると、壁や線で囲まれた範囲を拾います。形を確かめて「この形でエリアにする」を押します。付けるカテゴリ：<b style="color:${color(S.type)}">${esc(S.type)}</b>`}</div>
     <div class="pk-st" id="pkSt"></div>
     ${sl('tol','色の差の許容',3,60,'クリックした所の色と、どれくらい違う色までを同じ範囲とみなすか。隣とつながるときは下げる')}
-    ${sl('thin','細い線を無視',0,6,'これより細い線（家具・文字・床の模様・点線）を無視して、太い壁だけで区切る')}
-    ${sl('gap','隙間を閉じる',0,40,'ドアの開口や点線の切れ目など、この幅までの隙間を閉じたものとみなす。外に漏れるときは上げる')}
+    ${sl('thin','細い線を無視',0,6,'これより細い線（家具・文字・床の模様・点線・寸法線）を無視して、太い壁だけで区切る')}
+    ${sl('gap','隙間を閉じる',0,40,'ドアの開口・窓・点線の切れ目など、この幅までの隙間を閉じたものとみなす。外に漏れるときは上げる')}
     ${sl('fill','へこみを埋める',0,80,'壁に接した家具などで欠けた所を、この幅まで埋める')}
     <div class="au-btns"><button class="primary" id="pkGo" title="拾った形をエリアにします (Enter)">この形でエリアにする</button><button id="pkNo" title="拾った形を消します (Esc)">やめる</button></div>
-    <div class="au-tip">外に漏れる → 「隙間を閉じる」を上げる<br>隣の部屋とつながる → 「色の差」を下げる／「隙間を閉じる」を上げる<br>家具の所が欠ける → 「へこみを埋める」を上げる<br>エリアにしたあとも、「選択・移動」で角の位置を直せます。</div>
+    <div class="au-tip">${ol?'建物の中まで入り込む → 「隙間を閉じる」を上げる（窓・出入口）<br>寸法線や通り芯がはみ出す → 「細い線を無視」を上げる／Shift＋クリックで外側を足す':'外に漏れる → 「隙間を閉じる」を上げる<br>隣の部屋とつながる → 「色の差」を下げる／「隙間を閉じる」を上げる<br>家具の所が欠ける → 「へこみを埋める」を上げる'}<br>エリアにしたあとも、「選択・移動」で角の位置を直せます。</div>
     <div class="ar-cal${c?'':' miss'}"><b>縮尺</b><span>${c?`基準線 ${Math.round(c.mm).toLocaleString('ja-JP')} mm（1px ≒ ${(m*1000).toFixed(1)} mm）`:'未設定です。基準線を引くと面積が㎡で出ます。'}</span><div class="flex"><button data-a="cal">${c?'基準線を引き直す':'基準線を引く'}</button></div></div>`;
   updPick(f)}
 function updPick(f){const st=pickStatus(f),b=$('pkSt');if(!b)return;b.className='pk-st'+st.cls;b.innerHTML=st.html;
   const m=mPerPx(f);for(const k of['tol','thin','gap','fill']){const o=$('pkV_'+k);if(o)o.textContent=k==='tol'?S.pick.tol+'%':(S.pick[k]+'px'+(m&&S.pick[k]?`（${Math.round(S.pick[k]*m*1000)}mm）`:''))}
   const g=$('pkGo');if(g)g.disabled=!(apick&&apick.key===pickKey(f)&&apick.res.ok)}
 $('areaBody').addEventListener('input',e=>{const k=e.target.dataset.pk;if(!k)return;S.pick[k]=+e.target.value;persist();updPick(F());
-  clearTimeout(pickT);if(apick)pickT=setTimeout(()=>{if(apick)pickAt(apick.x,apick.y)},120)});
+  clearTimeout(pickT);pickT=setTimeout(repick,120)});
 $('areaBody').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.pm){S.pick.mode=b.dataset.pm;apick=null;persist();$('areaBody').dataset.key='';renderAreas();renderAreaEdit();renderHint();if(S.pick.mode==='outline')repick();return}
   if(b.id==='pkGo')commitPick();
   if(b.id==='pkNo'){apick=null;renderAreas();updPick(F());renderHint()}});
 /* 家具占有率の設定（右の欄のスライダー） */
@@ -2338,11 +2423,43 @@ let furnT=0;
 $('areaBody').addEventListener('input',e=>{const k=e.target.dataset.fz;if(!k)return;const v=k==='show'?e.target.checked:+e.target.value;S.furn[k]=v;persist();
   const o=$('fzV_'+k),m=mPerPx(F());if(o)o.textContent=k==='min'?(m?(v/100).toFixed(2)+'㎡':'自動'):v+'%';
   clearTimeout(furnT);furnT=setTimeout(()=>{if(k!=='limit')furnCache.clear();const f=F();if(!f)return;renderAreas();renderAreaPalStats();const b=$('arTblBox');if(b)b.innerHTML=areaTable(areaStats(f))},180)});
+
+/* ---------- 図形の組み合わせ（合体・差し引き・重なり）：図面の升目に塗って組み合わせ、輪郭を取り直す ---------- */
+function maskPieces(M,bw,bh){
+  const N=bw*bh,lab=new Int32Array(N),out=[];let L=0;
+  for(let k0=0;k0<N;k0++){if(!M[k0]||lab[k0])continue;L++;const st=[k0];lab[k0]=L;let n=0;
+    while(st.length){const k=st.pop(),i=k%bw;n++;for(const q of[i>0?k-1:-1,i<bw-1?k+1:-1,k-bw,k+bw])if(q>=0&&q<N&&M[q]&&!lab[q]){lab[q]=L;st.push(q)}}
+    if(n<4)continue;
+    const C=new Uint8Array(N);for(let k=0;k<N;k++)C[k]=lab[k]===L?1:0;
+    const Fz=Room.fillHoles(C,bw,bh),Hm=new Uint8Array(N);for(let k=0;k<N;k++)Hm[k]=Fz[k]&&!C[k]?1:0;
+    const holes=[];const hl=new Int32Array(N);let HL=0;
+    for(let h0=0;h0<N;h0++){if(!Hm[h0]||hl[h0])continue;HL++;const s2=[h0];hl[h0]=HL;let m=0;
+      while(s2.length){const k=s2.pop(),i=k%bw;m++;for(const q of[i>0?k-1:-1,i<bw-1?k+1:-1,k-bw,k+bw])if(q>=0&&q<N&&Hm[q]&&!hl[q]){hl[q]=HL;s2.push(q)}}
+      if(m<4)continue;const Hc=new Uint8Array(N);for(let k=0;k<N;k++)Hc[k]=hl[k]===HL?1:0;holes.push(Room.simplify(Room.trace(Hc,bw,bh),0.8))}
+    out.push({poly:Room.simplify(Room.trace(Fz,bw,bh),0.8),holes,px:n})}
+  return out.sort((a,b)=>b.px-a.px)}
+function areaBool(op){const f=F();if(!f)return;
+  const list=[...asel].map(id=>(f.areas||[]).find(a=>a.id===id)).filter(Boolean);if(list.length<2){toast('エリアを2つ以上選んでください');return}
+  const base=list[0],PP=list.map(a=>toPx(f,a.pts)),xs=PP.flat().map(p=>p.x),ys=PP.flat().map(p=>p.y);
+  const bx=Math.max(0,Math.floor(Math.min(...xs))-2),by=Math.max(0,Math.floor(Math.min(...ys))-2),bw=Math.min(f.w,Math.ceil(Math.max(...xs))+2)-bx,bh=Math.min(f.h,Math.ceil(Math.max(...ys))+2)-by,N=bw*bh;
+  const M=polyMask(PP[0],bx,by,bw,bh);
+  for(let j=1;j<PP.length;j++){const Q=polyMask(PP[j],bx,by,bw,bh);for(let k=0;k<N;k++)M[k]=op==='union'?(M[k]|Q[k]):op==='diff'?(M[k]&&!Q[k]?1:0):(M[k]&Q[k])}
+  const pieces=maskPieces(M,bw,bh);
+  if(!pieces.length){toast(op==='inter'?'重なっている所がありません':'結果が空になりました');return}
+  snap();const del=new Set(list.map(a=>a.id)),rel=P=>P.map(p=>({x:clamp01((p.x+bx)/f.w),y:clamp01((p.y+by)/f.h)}));
+  f.areas=f.areas.filter(a=>!del.has(a.id));let no=f.areas.reduce((m,x)=>Math.max(m,+x.no||0),0);const made=[];
+  const mk=(pts,role)=>{const a={id:uid(),no:++no,cat:base.cat,name:base.name,sign:role==='ded'?-1:role==='add'?1:0,role,shape:'poly',pts,memo:base.memo||''};f.areas.push(a);made.push(a);return a};
+  let nh=0;for(const pc of pieces){if(pc.poly.length<3)continue;mk(rel(pc.poly),roleOf(base));
+    if(roleOf(base)==='add'||roleOf(base)==='outline')for(const h of pc.holes)if(h.length>=3){mk(rel(h),'ded');nh++}}
+  f.areas.sort((x,y)=>(+x.no||0)-(+y.no||0)).forEach((a,i)=>a.no=i+1);
+  asel=new Set(made.filter(a=>roleOf(a)!=='ded').map(a=>a.id));refresh();
+  const np=made.length-nh;toast(`${{union:'合体',diff:'差し引き',inter:'重なり'}[op]}しました（${np>1?np+' つの形に分かれました。':''}${nh?'中の穴 '+nh+' か所を「控除」にしました。':''}取り消しで戻せます）`)}
 /* 図面画像：エリアと控除・家具・ラベルを描く */
 function drawAreasPng(g,f,base,o,FF){const st=areaStats(f),lw=Math.max(1.5,base*.16),fs=Math.max(8,base*.85*o.text/100);
   const hatch=(()=>{const c=document.createElement('canvas'),s=Math.max(8,Math.round(base*.9));c.width=c.height=s;const h=c.getContext('2d');h.strokeStyle='rgba(180,35,24,.55)';h.lineWidth=Math.max(1,s/6);h.beginPath();h.moveTo(0,s);h.lineTo(s,0);h.moveTo(-s/2,s/2);h.lineTo(s/2,-s/2);h.moveTo(s/2,s*1.5);h.lineTo(s*1.5,s/2);h.stroke();return g.createPattern(c,'repeat')})();
-  const rank={add:0,ded:1,furn:2,nofurn:2},order=[...st.rows.values()].sort((x,y)=>rank[x.ro]-rank[y.ro]||y.px-x.px);
+  const rank={outline:-1,add:0,ded:1,furn:2,nofurn:2},order=[...st.rows.values()].sort((x,y)=>rank[x.ro]-rank[y.ro]||y.px-x.px);
   for(const r of order){const ro=r.ro,col=color(r.a.cat);g.save();g.beginPath();r.P.forEach((p,i)=>i?g.lineTo(p.x,p.y):g.moveTo(p.x,p.y));g.closePath();
+    if(ro==='outline'){g.setLineDash([lw*4,lw*1.6]);g.strokeStyle='#1d2740';g.lineWidth=lw*1.6;g.stroke();g.restore();continue}
     if(ro==='ded'){g.fillStyle='rgba(255,255,255,.35)';g.fill();g.fillStyle=hatch;g.fill();g.setLineDash([lw*3,lw*2]);g.strokeStyle='#b42318'}
     else if(ro==='furn'){g.fillStyle='rgba(42,157,168,.3)';g.fill();g.setLineDash([lw*3,lw*2]);g.strokeStyle='#2a9da8'}
     else if(ro==='nofurn'){g.fillStyle='rgba(107,114,128,.15)';g.fill();g.setLineDash([lw*3,lw*2]);g.strokeStyle='#6b7280'}
@@ -2350,8 +2467,8 @@ function drawAreasPng(g,f,base,o,FF){const st=areaStats(f),lw=Math.max(1.5,base*
     g.lineWidth=lw;g.stroke();g.restore();
     if(ro==='add'&&S.furn.show&&r.fu){const cv=furnCanvas(r.fu);if(cv)g.drawImage(cv,r.fu.bx,r.fu.by)}}
   if(o.text<=0)return;
-  for(const r of order){const ro=r.ro;if(ro==='furn'||ro==='nofurn')continue;const ded=ro==='ded',col=ded?'#b42318':color(r.a.cat);
-    const L=[`${ded?'控除 ':''}${r.label}${r.a.name?' '+r.a.name:''}`,...(ded?[st.m?`−${fmtA(r.m2)}㎡`:'']:[st.m?`${fmtA(r.net)}㎡`:'',r.cap?`${r.cap}席${st.m?'・'+fmtA(ratio(r.net,r.cap))+'㎡/席':''}`:'',r.fu?`家具 ${fmtP(r.fr)}${overLimit(r.fr)?'（狭い）':''}`:''])].filter(Boolean);
+  for(const r of order){const ro=r.ro;if(ro==='furn'||ro==='nofurn')continue;const ded=ro==='ded',col=ded?'#b42318':ro==='outline'?'#1d2740':color(r.a.cat);
+    const L=[`${ded?'控除 ':''}${r.label}${r.a.name?' '+r.a.name:''}`,...(ded?[st.m?`−${fmtA(r.m2)}㎡`:'']:[st.m?`${fmtA(r.net)}㎡`:'',r.cap?`${r.cap}席${st.m?'・'+fmtA(ratio(r.net,r.cap))+'㎡/席':''}`:'',ro==='add'&&r.fu?`家具 ${fmtP(r.fr)}${overLimit(r.fr)?'（狭い）':''}`:''])].filter(Boolean);
     g.font=`bold ${Math.round(fs)}px ${FF}`;const w=Math.max(...L.map(t=>g.measureText(t).width))+fs*.9,lh=fs*1.3,h=lh*L.length+fs*.4;
     g.save();g.fillStyle='rgba(255,255,255,.9)';g.strokeStyle=col;g.lineWidth=Math.max(1,lw*.7);g.beginPath();if(g.roundRect)g.roundRect(r.c.x-w/2,r.c.y-h/2,w,h,fs*.35);else g.rect(r.c.x-w/2,r.c.y-h/2,w,h);g.fill();g.stroke();
     g.textAlign='center';g.textBaseline='middle';L.forEach((t,i)=>{g.fillStyle=i===0?col:/狭い/.test(t)?'#b42318':'#1d2624';g.fillText(t,r.c.x,r.c.y-h/2+fs*.2+lh*(i+.5))});g.restore()}}
