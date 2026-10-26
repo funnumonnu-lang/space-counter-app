@@ -343,11 +343,11 @@ header .adv{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8p
 .ar-svg polyline.draft,.ar-svg line.draft{fill:none}
 .ar-svg .dv{fill:#fff;stroke:#3f72d8;stroke-width:2;vector-effect:non-scaling-stroke;r:calc(4px*var(--inv,1));pointer-events:none}
 .ar-svg .dv.first{fill:#3f72d8;r:calc(6px*var(--inv,1))}
-.al{position:absolute;transform:translate(-50%,-50%) scale(var(--inv,1));pointer-events:none;display:flex;flex-direction:column;align-items:center;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.9);border:1.5px solid var(--c);font:700 calc(11px*var(--fs,1))/1.35 var(--font-ui);color:#1d2624;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.18)}
-.al i{font-style:normal;font-size:.9em;color:var(--c)}
-.al span{font-family:var(--font-num)}
-.al.ded{border-style:dashed;border-color:#b42318}.al.ded i{color:#b42318}
-.al.other{opacity:.55}
+.arl{position:absolute;transform:translate(-50%,-50%) scale(var(--inv,1));pointer-events:none;display:flex;flex-direction:column;align-items:center;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.9);border:1.5px solid var(--c);font:700 calc(11px*var(--fs,1))/1.35 var(--font-ui);color:#1d2624;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.arl i{font-style:normal;font-size:.9em;color:var(--c)}
+.arl span{font-family:var(--font-num)}
+.arl.ded{border-style:dashed;border-color:#b42318}.arl.ded i{color:#b42318}
+.arl.other{opacity:.55}
 .ar-cal{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface-2);font-size:12px}
 .ar-cal.miss{border-color:color-mix(in srgb,#e0761b 60%,var(--line));background:color-mix(in srgb,#e0761b 8%,var(--surface))}
 .ar-nums{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:var(--r);background:var(--surface-2)}
@@ -361,12 +361,12 @@ header .adv{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8p
 .ar.furn{fill:#2a9da8;fill-opacity:.3;stroke:#2a9da8;stroke-dasharray:6 4}
 .ar.outline{fill:#1d2740;fill-opacity:.04;stroke:#1d2740;stroke-width:3.5;stroke-dasharray:12 5}
 .ar.outline.on{fill-opacity:.1;stroke-width:5}
-.al.outline{border-color:#1d2740;border-width:2px}.al.outline i{color:#1d2740}
+.arl.outline{border-color:#1d2740;border-width:2px}.arl.outline i{color:#1d2740}
 .pk-mode{display:grid;grid-template-columns:1fr 1fr}.pk-mode button{justify-content:center}
 .ar.nofurn{fill:#6b7280;fill-opacity:.12;stroke:#6b7280;stroke-dasharray:3 4}
 .ar-svg .fov{pointer-events:none;image-rendering:pixelated}
-.al em{font-style:normal;color:#1f7f88}.al em.fw,.fw{color:var(--danger)!important;font-weight:700}
-.al.furn,.al.nofurn{border-style:dashed;padding:1px 5px}.al.furn{border-color:#2a9da8}.al.furn i{color:#2a9da8}.al.nofurn{border-color:#6b7280}.al.nofurn i{color:#6b7280}
+.arl em{font-style:normal;color:#1f7f88}.arl em.fw,.fw{color:var(--danger)!important;font-weight:700}
+.arl.furn,.arl.nofurn{border-style:dashed;padding:1px 5px}.arl.furn{border-color:#2a9da8}.arl.furn i{color:#2a9da8}.arl.nofurn{border-color:#6b7280}.arl.nofurn i{color:#6b7280}
 .ar-role button{padding:5px 7px;font-size:12px}
 #areaBody .ar-cal .sl{grid-template-columns:96px 1fr 52px}
 .ar-svg .vh{fill:#fff;stroke:var(--c);stroke-width:2.5;vector-effect:non-scaling-stroke;cursor:move;r:calc(6px*var(--inv,1))}
@@ -2205,7 +2205,7 @@ function renderAreas(){
     else if(ro==='outline')lines=[st.m?`${fmtA(r.net)}㎡`:'縮尺未設定',r.cap?`${r.cap}席${st.m?'・'+fmtA(ratio(r.net,r.cap))+'㎡/席':''}`:'席なし'];
     else lines=[st.m?`${fmtA(r.net)}㎡`:'縮尺未設定',r.cap?`${r.cap}席${st.m?'・'+fmtA(ratio(r.net,r.cap))+'㎡/席':''}`:'席なし',
       r.fu?`<em class="${overLimit(r.fr)?'fw':''}">家具 ${fmtP(r.fr)}${overLimit(r.fr)?' 狭い':''}</em>`:'家具 計算中'];
-    h+=`<div class="al ${ro}${on?'':' other'}" style="left:${r.c.x}px;top:${r.c.y}px;--c:${color(a.cat)}"><i>${ro==='ded'?'控除 ':''}${esc(r.label)}${a.name?' '+esc(a.name):''}</i>${lines.filter(Boolean).map(l=>`<span>${l}</span>`).join('')}</div>`}
+    h+=`<div class="arl ${ro}${on?'':' other'}" style="left:${r.c.x}px;top:${r.c.y}px;--c:${color(a.cat)}"><i>${ro==='ded'?'控除 ':''}${esc(r.label)}${a.name?' '+esc(a.name):''}</i>${lines.filter(Boolean).map(l=>`<span>${l}</span>`).join('')}</div>`}
   areaLayer.innerHTML=h}
 function areaHint(){const f=F(),cal=f&&!f.calib&&S.atool!=='calib'?'　※先に「縮尺」で基準線を引くと面積が出ます':'';
   if(S.mode==='sel')return(asel.size===1?'【面積】角の印をドラッグで角を動かす（Altで吸い付きなし）／ 辺の中ほどの印をドラッグで角を足す ／ Alt＋クリックで角を消す ／ ':'【面積】エリアをクリックで選択（Shiftで追加）／ ')+'ドラッグで移動 ／ 何もない所をドラッグで範囲選択 ／ Deleteで削除'+cal;
@@ -2428,8 +2428,8 @@ function pickStatus(f){const m=mPerPx(f),ol=S.pick.mode==='outline';
     +(r.leak?'<br>⚠ 図面の端まで広がりました。部屋の外に漏れています。「隙間を閉じる」を上げるか、「色の差」を下げてください。':'')
     +(!r.leak&&r.px<f.w*f.h*0.002?'<br>⚠ とても小さい範囲です。机や家具の中をクリックしていないか確かめてください（床の部分をクリックします）。':'')}}
 function renderPickPanel(el,f){const ol=S.pick.mode==='outline';
-  if(el.dataset.key==='pick-'+S.pick.mode&&$('pkSt')){updPick(f);return}
-  el.dataset.key='pick-'+S.pick.mode;const p=S.pick,m=mPerPx(f);
+  const key='pick-'+S.pick.mode+'-'+S.type;if(el.dataset.key===key&&$('pkSt')){updPick(f);return}
+  el.dataset.key=key;const p=S.pick,m=mPerPx(f);
   const sl=(k,lbl,min,max,tip)=>`<label class="sl" title="${tip}"><span>${lbl}</span><input type="range" data-pk="${k}" min="${min}" max="${max}" step="1" value="${p[k]}"><output id="pkV_${k}"></output></label>`;
   const c=f.calib;
   el.innerHTML=`<div class="seg pk-mode"><button data-pm="room" aria-pressed="${!ol}" title="部屋の床をクリックして、その部屋を拾う">部屋を拾う</button><button data-pm="outline" aria-pressed="${ol}" title="建物の外側をクリックして、フロア全体の外周を拾う">外周を拾う</button></div>
