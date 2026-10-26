@@ -2476,10 +2476,10 @@ function drawAreasPng(g,f,base,o,FF){const st=areaStats(f),lw=Math.max(1.5,base*
 /* ---------- 見本から自動で探す ---------- */
 /* 流れ：見本を囲む(sample) → 探す範囲を選ぶ(ready/area) → 探す(busy) → 候補を確認(result) → プロット
    候補は画面上の仮の表示で、保存しない。「○件をプロット」で通常のプロットになる */
-const AU={key:'',phase:'sample',box:null,area:null,cands:[],face:-1,active:[]};
+const AU={key:'',phase:'sample',box:null,area:null,cands:[],face:-1,active:[],ang:0,rot:null};
 const auLayer=$('autoLayer');
 const auKey=()=>{const f=F();return f?f.id+':'+f.img.length:''};
-function auSync(){const k=auKey();if(AU.key===k)return;AU.key=k;AU.box=null;AU.area=null;AU.cands=[];AU.face=-1;AU.phase='sample'}
+function auSync(){const k=auKey();if(AU.key===k)return;AU.key=k;AU.box=null;AU.area=null;AU.cands=[];AU.face=-1;AU.phase='sample';AU.ang=0;AU.rot=null}
 const auThr=()=>S.auto.thr/100;
 /* 図面の明るさ（0〜1）。フロアごとに1回だけ作る */
 let grayCache={key:'',g:null};
@@ -2501,10 +2501,43 @@ function runDetect(g,W,H,box,opt){return new Promise((ok,ng)=>{
     worker.onerror=e=>{e.preventDefault&&e.preventDefault();workerFail=true;worker=null;local()};
     worker.postMessage({g,W,H,box,opt})}
   catch(e){workerFail=true;worker=null;local()}})}
+/* ---- 見本の角度（斜めの図面）：図面を逆向きに回して傾きをまっすぐに戻してから探し、見つかった位置を元に戻す ---- */
+/* 囲んだ枠（軸に沿った四角）と角度から、傾いた見本の大きさ（枠にぴったり収まる傾いた四角）を出す */
+function sampleRect(){const b=AU.box,t=Math.abs(AU.ang)*Math.PI/180,c=Math.cos(t),s=Math.sin(t),d=c*c-s*s;let w=b.w,h=b.h;
+  if(t>0.004&&d>0.2){const a=(b.w*c-b.h*s)/d,e=(b.h*c-b.w*s)/d;if(a>=3&&e>=3){w=a;h=e}}
+  return{cx:b.x+b.w/2,cy:b.y+b.h/2,w,h}}
+/* 見本のまわり（見本の2倍の範囲）の線の向き（90°ごとの繰り返し）から、傾きを推定する。少しぼかしてからなめらかに向きを測る（はっきりしなければ0°） */
+function estimateAngle(g,W,H,b){const cx=b.x+b.w/2,cy=b.y+b.h/2;
+  const x0=Math.max(0,Math.floor(cx-b.w)-1),y0=Math.max(0,Math.floor(cy-b.h)-1),x1=Math.min(W-1,Math.ceil(cx+b.w)+1),y1=Math.min(H-1,Math.ceil(cy+b.h)+1),pw=x1-x0+1,ph=y1-y0+1;
+  if(pw<5||ph<5)return 0;const P=new Float32Array(pw*ph);
+  for(let y=0;y<ph;y++)for(let x=0;x<pw;x++){let a=0,n=0;for(let j=-1;j<=1;j++)for(let i=-1;i<=1;i++){const X=x0+x+i,Y=y0+y+j;if(X<0||Y<0||X>=W||Y>=H)continue;a+=g[Y*W+X];n++}P[y*pw+x]=a/n}
+  let sc=0,ss=0,sm=0;
+  for(let y=1;y<ph-1;y++)for(let x=1;x<pw-1;x++){const i=y*pw+x;
+    const gx=(P[i-pw+1]+2*P[i+1]+P[i+pw+1])-(P[i-pw-1]+2*P[i-1]+P[i+pw-1]),gy=(P[i+pw-1]+2*P[i+pw]+P[i+pw+1])-(P[i-pw-1]+2*P[i-pw]+P[i-pw+1]),m=gx*gx+gy*gy;
+    if(m<0.004)continue;const p=4*Math.atan2(gy,gx);sc+=m*Math.cos(p);ss+=m*Math.sin(p);sm+=m}
+  if(!sm||Math.hypot(sc,ss)/sm<0.12)return 0;
+  const a=Math.atan2(ss,sc)/4*180/Math.PI;return Math.abs(a)<0.75?0:Math.round(a*2)/2}
+/* 明るさの画像を角度 ang だけ逆に回して、傾きをまっすぐにした画像を作る（fwd：元→回した後、back：回した後→元） */
+let rotCache={key:'',r:null};
+function rotGray(g,W,H,ang){const key=auKey()+'|'+ang;if(rotCache.key===key)return rotCache.r;
+  const t=ang*Math.PI/180,c=Math.cos(t),s=Math.sin(t),W2=Math.ceil(W*Math.abs(c)+H*Math.abs(s)),H2=Math.ceil(W*Math.abs(s)+H*Math.abs(c));
+  const cx=W/2,cy=H/2,cx2=W2/2,cy2=H2/2,o=new Float32Array(W2*H2);
+  const back=(x,y)=>{const dx=x-cx2,dy=y-cy2;return{x:cx+dx*c-dy*s,y:cy+dx*s+dy*c}},fwd=(x,y)=>{const dx=x-cx,dy=y-cy;return{x:cx2+dx*c+dy*s,y:cy2-dx*s+dy*c}};
+  for(let y=0;y<H2;y++)for(let x=0;x<W2;x++){const p=back(x+.5,y+.5),X=p.x-.5,Y=p.y-.5,ix=Math.floor(X),iy=Math.floor(Y);
+    if(ix<0||iy<0||ix>=W-1||iy>=H-1){o[y*W2+x]=1;continue}const fx=X-ix,fy=Y-iy,k=iy*W+ix;
+    o[y*W2+x]=(g[k]*(1-fx)+g[k+1]*fx)*(1-fy)+(g[k+W]*(1-fx)+g[k+W+1]*fx)*fy}
+  const r={g:o,W:W2,H:H2,fwd,back,ang};rotCache={key,r};return r}
 async function auSearch(){const f=F();if(!f||!AU.box)return;AU.phase='busy';renderAuto();
-  try{const g=await grayOf(f),r=await runDetect(g,f.w,f.h,AU.box,{area:AU.area,floor:0.5});
+  try{const g=await grayOf(f);let G=g,W=f.w,H=f.h,box=AU.box,area=AU.area,R=null;
+    if(Math.abs(AU.ang)>=0.25){R=rotGray(g,f.w,f.h,AU.ang);G=R.g;W=R.W;H=R.H;const sr=sampleRect(),c2=R.fwd(sr.cx,sr.cy);box={x:c2.x-sr.w/2,y:c2.y-sr.h/2,w:sr.w,h:sr.h};
+      if(area){const q=[[area.x,area.y],[area.x+area.w,area.y],[area.x,area.y+area.h],[area.x+area.w,area.y+area.h]].map(([x,y])=>R.fwd(x,y)),xs=q.map(p=>p.x),ys=q.map(p=>p.y);
+        area={x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)}}}
+    const r=await runDetect(G,W,H,box,{area,floor:0.5});
     if(AU.key!==auKey())return;
-    AU.face=r.face;AU.cands=r.cands.map(c=>({...c,off:false}));AU.phase='result';
+    let cands=r.cands;AU.rot=R;
+    if(R){const A=AU.area;cands=cands.map(c=>{const p=R.back(c.x,c.y);return{...c,ox:c.x,oy:c.y,x:p.x,y:p.y,ang:AU.ang}})
+      .filter(c=>c.x>=0&&c.y>=0&&c.x<f.w&&c.y<f.h&&(!A||(c.x>=A.x&&c.x<=A.x+A.w&&c.y>=A.y&&c.y<=A.y+A.h)))}
+    AU.face=r.face;AU.cands=cands.map(c=>({...c,off:false}));AU.phase='result';
     const n=auList().filter(c=>!c.dup).length;toast(n?`候補が ${n} 件見つかりました。確認してからプロットしてください`:'候補が見つかりませんでした。右の「似ている度合い」を下げてみてください')}
   catch(err){AU.phase='ready';toast('探せませんでした：'+(err&&err.message||err))}
   renderAuto()}
@@ -2520,24 +2553,25 @@ function bands(list,key,tol){const s=[...list].sort((a,b)=>key(a)-key(b)),out=[]
   for(const p of s){if(!cur||key(p)-st>tol){cur=[];out.push(cur);st=key(p)}cur.push(p)}return out}
 /* 島に分ける：椅子の前（机側）に少しずらした点どうしが近いものを同じ島とみなす。
    机をはさんで向かい合う席は近づき、通路をはさんで背中合わせの席は離れる */
+const OX=c=>c.ox??c.x,OY=c=>c.oy??c.y;   /* 斜めの図面では、傾きをまっすぐにした向きで並べる */
 function islands(list,sz,face){
   const n=list.length,fv=list.map(c=>face<0||c.man?null:faceVec(face,c.o));
-  const pt=list.map((c,i)=>{const v=fv[i];if(!v)return{x:c.x,y:c.y};const d=(v[0]?c.w:c.h)*0.9;return{x:c.x+v[0]*d,y:c.y+v[1]*d}});
+  const pt=list.map((c,i)=>{const v=fv[i];if(!v)return{x:OX(c),y:OY(c)};const d=(v[0]?c.w:c.h)*0.9;return{x:OX(c)+v[0]*d,y:OY(c)+v[1]*d}});
   /* 目安の間隔：同じ向きの候補どうしの最短距離（中央値） */
   const nn=[];
   for(let i=0;i<n;i++){let b=Infinity;
-    for(let j=0;j<n;j++){if(i===j)continue;if(fv[i]&&fv[j]&&(fv[i][0]!==fv[j][0]||fv[i][1]!==fv[j][1]))continue;const d=Math.hypot(list[i].x-list[j].x,list[i].y-list[j].y);if(d<b)b=d}
+    for(let j=0;j<n;j++){if(i===j)continue;if(fv[i]&&fv[j]&&(fv[i][0]!==fv[j][0]||fv[i][1]!==fv[j][1]))continue;const d=Math.hypot(OX(list[i])-OX(list[j]),OY(list[i])-OY(list[j]));if(d<b)b=d}
     if(b<Infinity)nn.push(b)}
   nn.sort((a,b)=>a-b);const T=Math.max(sz*1.2,(nn.length?nn[nn.length>>1]:sz*2)*1.3);
   const par=list.map((_,i)=>i),root=i=>{while(par[i]!==i)i=par[i]=par[par[i]];return i};
   for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(Math.hypot(pt[i].x-pt[j].x,pt[i].y-pt[j].y)<T)par[root(i)]=root(j);
   const g=new Map();list.forEach((c,i)=>{const r=root(i);if(!g.has(r))g.set(r,[]);g.get(r).push(c)});
-  return[...g.values()].map(ps=>({ps,x0:Math.min(...ps.map(p=>p.x)),y0:Math.min(...ps.map(p=>p.y)),x1:Math.max(...ps.map(p=>p.x)),y1:Math.max(...ps.map(p=>p.y))}))}
+  return[...g.values()].map(ps=>({ps,x0:Math.min(...ps.map(OX)),y0:Math.min(...ps.map(OY)),x1:Math.max(...ps.map(OX)),y1:Math.max(...ps.map(OY))}))}
 function auOrder(list){
   if(!list.length)return[];
   const sz=Math.min(AU.box.w,AU.box.h),tol=sz*0.5;
-  const rows=ps=>bands(ps,p=>p.y,tol).flatMap(b=>b.sort((a,c)=>a.x-c.x));
-  const cols=ps=>bands(ps,p=>p.x,tol).flatMap(b=>b.sort((a,c)=>a.y-c.y));
+  const rows=ps=>bands(ps,OY,tol).flatMap(b=>b.sort((a,c)=>OX(a)-OX(c)));
+  const cols=ps=>bands(ps,OX,tol).flatMap(b=>b.sort((a,c)=>OY(a)-OY(c)));
   if(S.auto.order==='row')return rows(list);
   if(S.auto.order==='col')return cols(list);
   /* 島ごと：島は左上から行ごと、島の中は島の長い向きに沿って並べる */
@@ -2553,7 +2587,8 @@ function autoHint(){return{
 function renderAutoLayer(){
   const on=S.mode==='auto',f=F();let h='';AU.active=[];
   if(on&&f){
-    if(AU.box)h+=`<div class="sbox" style="left:${AU.box.x}px;top:${AU.box.y}px;width:${AU.box.w}px;height:${AU.box.h}px"></div>`;
+    if(AU.box){if(AU.ang){const r=sampleRect();h+=`<div class="sbox area" style="left:${AU.box.x}px;top:${AU.box.y}px;width:${AU.box.w}px;height:${AU.box.h}px;opacity:.5"></div><div class="sbox" style="left:${r.cx-r.w/2}px;top:${r.cy-r.h/2}px;width:${r.w}px;height:${r.h}px;transform:rotate(${AU.ang}deg)"></div>`}
+      else h+=`<div class="sbox" style="left:${AU.box.x}px;top:${AU.box.y}px;width:${AU.box.w}px;height:${AU.box.h}px"></div>`}
     if(AU.area&&AU.phase!=='area')h+=`<div class="sbox area" style="left:${AU.area.x}px;top:${AU.area.y}px;width:${AU.area.w}px;height:${AU.area.h}px"></div>`;
     if(AU.phase==='result'){
       const list=auList(),act=auOrder(list.filter(c=>!c.off&&!c.dup)),no0=nextNo(f),thr=auThr(),c0=color(S.type),sq=S.kind==='stor';
@@ -2562,7 +2597,7 @@ function renderAutoLayer(){
       for(const c of list){if(c.dup)continue;
         const cls='cand'+(sq?' sq':'')+(c.off?' off':'')+(!c.off&&!c.man&&c.score<thr+0.05?' weak':'')+(c.man?' man':'');
         const tip=(c.man?'手で足した候補':`見本との一致度 ${Math.round(c.score*100)}%`)+`　クリックで${c.off?'戻す':c.man?'消す':'外す'}`;
-        h+=`<div class="${cls}" data-ci="${AU.cands.indexOf(c)}" style="left:${c.x}px;top:${c.y}px;--c:${c0}"><i style="width:${c.w}px;height:${c.h}px"></i><b title="${tip}">${c.off?'×':esc(num.get(c))}</b></div>`}}}
+        h+=`<div class="${cls}" data-ci="${AU.cands.indexOf(c)}" style="left:${c.x}px;top:${c.y}px;--c:${c0}"><i style="width:${c.w}px;height:${c.h}px${c.ang?`;transform:translate(-50%,-50%) rotate(${c.ang}deg)`:''}"></i><b title="${tip}">${c.off?'×':esc(num.get(c))}</b></div>`}}}
   auLayer.innerHTML=h;
   $('busy').hidden=!(on&&AU.phase==='busy');
   vp.classList.toggle('sel',S.mode==='sel'||(on&&!['sample','area'].includes(AU.phase)));
@@ -2577,7 +2612,9 @@ function renderAutoPanel(){
   let h='<h2>見本から自動で探す</h2>';
   if(!f){el.innerHTML=h+'<div class="muted">図面を追加してください。</div>';return}
   h+=step(1,st(1),'見本を1つ囲む',ph==='sample'?`図面上で、見本にする${what}を<b>1つだけ</b>ドラッグで囲んでください。周りの線を入れずにぴったり囲むと、見つかりやすくなります。`:'');
-  if(AU.box)h+=`<div class="au-thumb"><canvas id="auThumb"></canvas><div class="muted sm">付けるタイプ：<b style="color:${color(S.type)}">${esc(S.type)}</b><br>（左のパレットで変えられます）</div></div>`;
+  if(AU.box)h+=`<div class="au-thumb"><canvas id="auThumb"></canvas><div class="muted sm">付けるタイプ：<b style="color:${color(S.type)}">${esc(S.type)}</b><br>（左のパレットで変えられます）</div></div>
+    <label class="sl" title="図面が斜めのときは、見本の傾きに合わせます。青い枠が見本の向きにそろうように調整します"><span>見本の角度</span><input type="range" id="auAng" min="-45" max="45" step="0.5" value="${AU.ang}"><output id="auAngV">${AU.ang}°</output></label>
+    <div class="flex"><button id="auAngAuto" title="見本の中の線の向きから、傾きを自動で推定します">角度を自動で合わせる</button><button id="auAng0" title="角度を0°に戻します">0°に戻す</button></div>`;
   h+=step(2,st(2),'探す範囲を選ぶ',ph==='area'?'探す範囲を図面上でドラッグして囲んでください。執務エリアだけを囲むと、関係ない候補が減ります。':'');
   if(ph==='ready')h+=`<div class="au-btns"><button class="primary" id="auAll" title="フロア全体から、見本に似たものを探します">フロア全体を探す</button><button id="auArea" title="図面上で範囲を囲んで、その中だけを探します">範囲を囲んで探す</button><button id="auRedo" title="見本を囲み直します">見本を選び直す</button></div>`;
   if(ph==='area')h+=`<div class="au-btns"><button id="auCancel">やめる（Esc）</button></div>`;
@@ -2595,26 +2632,34 @@ function renderAutoPanel(){
         候補をクリックすると外す・戻す、何もない所をクリックすると候補を足せます。すでにプロットがある所は候補から除きます。</div>`}
   el.innerHTML=h;
   const o=$('auOrder');if(o)o.value=S.auto.order;
-  const cv=$('auThumb');if(cv&&AU.box&&img.complete){const b=AU.box,k=Math.min(4,120/b.w,96/b.h);cv.width=Math.max(1,Math.round(b.w*k));cv.height=Math.max(1,Math.round(b.h*k));
-    const g=cv.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(img,b.x,b.y,b.w,b.h,0,0,cv.width,cv.height)}
+  drawAuThumb();
 }
+/* 見本の拡大画像（角度があるときは、傾きをまっすぐに戻して表示） */
+function drawAuThumb(){const cv=$('auThumb');if(!cv||!AU.box||!img.complete)return;const r=sampleRect(),k=Math.min(4,120/r.w,96/r.h);
+  cv.width=Math.max(1,Math.round(r.w*k));cv.height=Math.max(1,Math.round(r.h*k));const g=cv.getContext('2d');g.imageSmoothingEnabled=false;g.fillStyle='#fff';g.fillRect(0,0,cv.width,cv.height);
+  g.translate(cv.width/2,cv.height/2);g.scale(k,k);g.rotate(-AU.ang*Math.PI/180);g.drawImage(img,-r.cx,-r.cy)}
+function setAuAng(v,full){AU.ang=Math.max(-45,Math.min(45,Math.round(v*2)/2));if(AU.phase==='result'){AU.cands=[];AU.phase='ready';full=true}
+  if(full){renderAuto();return}const o=$('auAngV');if(o)o.textContent=AU.ang+'°';renderAutoLayer();drawAuThumb()}
 function auSubText(c){return[c.off?`外した ${c.off} 件`:'',c.dup?`既存のプロットと重なる ${c.dup} 件は除外`:''].filter(Boolean).join('・')||'候補をクリックすると外せます'}
 function renderAuto(){auSync();renderAutoLayer();renderAutoPanel();renderHint()}
 /* しきい値・並べ方を変えたとき（右の欄は作り直さず、数だけ更新する） */
 function auUpdateCounts(){renderAutoLayer();const c=auCounts();if(!$('auN'))return;
   $('auN').textContent=c.n;$('auSub').textContent=auSubText(c);const b=$('auGo');b.textContent=`${c.n} 件をプロット`;b.disabled=!c.n}
 $('secAuto').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.id==='auAngAuto'){const f=F();if(f&&AU.box)grayOf(f).then(g=>{const a=estimateAngle(g,f.w,f.h,AU.box);setAuAng(a,true);toast(a?`見本の傾きを約${a}°と推定しました。青い枠が見本の向きとそろっているか確かめてください`:'はっきりした傾きは見つかりませんでした（0°）')});return}
+  if(b.id==='auAng0'){setAuAng(0,true);return}
   if(b.id==='auAll'){AU.area=null;auSearch()}
   if(b.id==='auArea'){AU.phase='area';AU.cands=[];renderAuto()}
   if(b.id==='auCancel'){AU.phase=AU.box?'ready':'sample';renderAuto()}
   if(b.id==='auRedo'){AU.box=null;AU.area=null;AU.cands=[];AU.phase='sample';renderAuto()}
   if(b.id==='auGo')auCommit()});
 let auRaf=0;
-$('secAuto').addEventListener('input',e=>{if(e.target.id!=='auThr')return;S.auto.thr=+e.target.value;$('auThrV').textContent=S.auto.thr+'%';
+$('secAuto').addEventListener('input',e=>{if(e.target.id==='auAng'){setAuAng(+e.target.value,false);return}if(e.target.id!=='auThr')return;S.auto.thr=+e.target.value;$('auThrV').textContent=S.auto.thr+'%';
   cancelAnimationFrame(auRaf);auRaf=requestAnimationFrame(auUpdateCounts);persist()});
 $('secAuto').addEventListener('change',e=>{
   if(e.target.id==='auOrder'){S.auto.order=e.target.value;auUpdateCounts();persist()}
-  if(e.target.id==='auRot'){S.auto.rot[S.kind]=e.target.checked;persist()}});
+  if(e.target.id==='auRot'){S.auto.rot[S.kind]=e.target.checked;persist()}
+  if(e.target.id==='auAng')renderAuto()});
 /* 図面上で囲んだ枠（見本・探す範囲） */
 function autoBox(d,e){
   if(!d.moved){toast('ドラッグで囲んでください');return}
@@ -2623,7 +2668,8 @@ function autoBox(d,e){
   if(AU.phase==='sample'){
     if(r.w<4||r.h<4){toast('小さすぎます。図面を拡大してから囲んでください');return}
     if(r.w>f.w*0.2||r.h>f.h*0.2){toast(`大きすぎます。${S.kind==='stor'?'什器':'席（椅子）'}を1つだけ囲んでください`);return}
-    AU.box=r;AU.cands=[];AU.phase='ready';renderAuto();return}
+    AU.box=r;AU.cands=[];AU.phase='ready';AU.ang=0;renderAuto();
+    grayOf(f).then(g=>{if(AU.box!==r)return;const a=estimateAngle(g,f.w,f.h,r);if(a){setAuAng(a,true);toast(`見本の傾きを約${a}°と推定しました。青い枠が見本の向きとそろっているか確かめてください（右の欄で調整できます）`)}});return}
   if(r.w<AU.box.w||r.h<AU.box.h){toast('範囲が見本より小さいです。もう少し大きく囲んでください');return}
   AU.area=r;auSearch()}
 /* 候補のクリック：外す・戻す／何もない所なら候補を足す */
@@ -2631,7 +2677,8 @@ function autoClick(d,e){
   if(AU.phase!=='result')return;
   if(d.ci!==null){const c=AU.cands[d.ci];if(!c)return;if(c.man)AU.cands.splice(d.ci,1);else c.off=!c.off;renderAutoLayer();auUpdateCounts();return}
   const f=F(),q=toImg(e);if(q.x<0||q.y<0||q.x>1||q.y>1)return;
-  AU.cands.push({x:q.x*f.w,y:q.y*f.h,w:AU.box.w,h:AU.box.h,o:0,rot:0,score:1,man:true,off:false});auUpdateCounts()}
+  const sr=sampleRect(),o2=AU.rot?AU.rot.fwd(q.x*f.w,q.y*f.h):null;
+  AU.cands.push({x:q.x*f.w,y:q.y*f.h,...(o2?{ox:o2.x,oy:o2.y,ang:AU.rot.ang}:{}),w:sr.w,h:sr.h,o:0,rot:0,score:1,man:true,off:false});auUpdateCounts()}
 /* 確定：候補を通常のプロットにする（取り消し1回で全部戻せる） */
 function auCommit(){
   const f=F(),act=AU.active;if(!f||!act.length){toast('プロットする候補がありません');return}
