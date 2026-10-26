@@ -1146,6 +1146,9 @@ function applyTypeDims(p,force){const t=tOf(p.type);if(!t||tKind(t)!=='stor')ret
 const $=id=>document.getElementById(id);
 const uid=()=>Math.random().toString(36).slice(2,10);
 const KEY='space-counter-adv-v1';
+/* 配布用は true にする（ブラウザに作業内容を保存しない。作業ファイルの保存・開くで使う） */
+const DIST=false;
+let dirty=false;   /* 配布用：作業ファイルに保存していない変更があるか */
 
 let S={floors:[],cur:0,type:'一般席',mode:'add',kind:'occ',view:'all',typeBy:{}};
 let sel=null, focusType=null, view={z:1,tx:0,ty:0}, undo=[];
@@ -1186,8 +1189,38 @@ function sampleFloor(){
 
 /* ---------- 保存 ---------- */
 let saveT;
-function persist(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('ブラウザ保存の容量を超えました。「保存」で作業ファイルに保存してください')}},300)}
+function persist(){if(DIST){dirty=true;return}clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('ブラウザ保存の容量を超えました。「保存」で作業ファイルに保存してください')}},300)}
+
+/* ---------- 読み込んだデータの安全確認 ----------
+   作業ファイル（JSON）やブラウザの保存から読んだ値のうち、画面の部品に入るもの（色・識別番号・大きさ・座標）と図面画像を、
+   決まった形のものだけ受け付ける。図面画像はファイルに埋め込まれた画像（data:image/…）だけを使い、外部と通信しない */
+const okColor=c=>typeof c==='string'&&/^#[0-9a-fA-F]{3,8}$/.test(c);
+const okId=v=>typeof v==='string'&&/^[\w-]{1,64}$/.test(v);
+const okImg=v=>typeof v==='string'&&/^data:image\/(png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/=\s]+$/i.test(v.slice(0,64))&&/^[A-Za-z0-9+/=\s]*$/.test(v.slice(v.indexOf(',')+1,v.indexOf(',')+4000));
+const fnum=(v,d)=>{v=+v;return isFinite(v)?v:d};
+const str=v=>v==null?'':String(v);
+function badImg(name){const c=document.createElement('canvas');c.width=1200;c.height=800;const g=c.getContext('2d');g.fillStyle='#f6f6f4';g.fillRect(0,0,1200,800);
+  g.fillStyle='#b42318';g.font='28px sans-serif';g.fillText('この図面は読み込めませんでした（'+str(name).slice(0,40)+'）',60,380);g.fillStyle='#5f6c68';g.font='20px sans-serif';g.fillText('安全のため、ファイルに埋め込まれた画像だけを使います。「図面を差し替え」で図面を入れ直してください。',60,430);
+  return c.toDataURL('image/png')}
+function sanitize(){let bad=0;
+  if(!Array.isArray(S.types))S.types=[];S.types=S.types.filter(t=>t&&typeof t==='object');
+  S.types.forEach((t,i)=>{t.k=str(t.k);if(!okColor(t.c))t.c=PALETTE[i%PALETTE.length];if(t.code!=null)t.code=str(t.code).slice(0,8)});
+  if(!Array.isArray(S.depts))S.depts=[];S.depts=S.depts.map(str);
+  if(!Array.isArray(S.floors))S.floors=[];S.floors=S.floors.filter(f=>f&&typeof f==='object');
+  for(const f of S.floors){if(!okId(f.id))f.id=uid();f.name=str(f.name);
+    f.w=Math.round(fnum(f.w,0));f.h=Math.round(fnum(f.h,0));
+    if(!okImg(f.img)||!(f.w>0&&f.w<=20000&&f.h>0&&f.h<=20000)){f.img=badImg(f.name);f.w=1200;f.h=800;bad++}
+    if(!Array.isArray(f.points))f.points=[];f.points=f.points.filter(p=>p&&typeof p==='object');
+    for(const p of f.points){if(!okId(p.id))p.id=uid();p.x=clamp01(fnum(p.x,0));p.y=clamp01(fnum(p.y,0));p.no=Math.max(0,Math.round(fnum(p.no,0)));
+      for(const k of['type','name','dept','memo'])p[k]=str(p[k])}
+    if(f.areas!=null){if(!Array.isArray(f.areas))f.areas=[];f.areas=f.areas.filter(a=>a&&typeof a==='object');
+      for(const a of f.areas){if(!okId(a.id))a.id=uid();a.no=Math.max(0,Math.round(fnum(a.no,0)));for(const k of['cat','name','memo'])a[k]=str(a[k]);
+        a.pts=Array.isArray(a.pts)?a.pts.filter(p=>p&&typeof p==='object').map(p=>({x:clamp01(fnum(p.x,0)),y:clamp01(fnum(p.y,0))})):[]}}
+    if(f.calib!=null){const c=f.calib;f.calib=c&&typeof c==='object'?{x1:clamp01(fnum(c.x1,0)),y1:clamp01(fnum(c.y1,0)),x2:clamp01(fnum(c.x2,0)),y2:clamp01(fnum(c.y2,0)),mm:fnum(c.mm,0)}:null}}
+  if(bad)setTimeout(()=>toast(`読み込めない図面が ${bad} 件ありました（安全のため、埋め込まれた画像以外は使いません）`),300);
+  return bad}
 function migrate(){
+  sanitize();
   if(!Array.isArray(S.types)||!S.types.length)S.types=DEFAULT_TYPES.map(t=>({...t}));
   for(const t of S.types)if(!t.kind)t.kind='occ';
   if(!S.types.some(t=>t.kind==='area')){const used=new Set(S.types.map(t=>t.code));for(const d of DEFAULT_TYPES.filter(d=>d.kind==='area'))if(!tOf(d.k))S.types.push({...d,code:used.has(d.code)?'':d.code})}
@@ -1222,7 +1255,7 @@ function migrate(){
   {const used=new Set(S.types.map(t=>t.code).filter(Boolean));for(const t of S.types)if(!t.code){let c=null;for(const ch of'ABCDEFGHIJKMNOPQRSUVWYZ'){if(!used.has(ch)){c=ch;break}}if(!c){let i=1;while(used.has('Z'+i))i++;c='Z'+i}t.code=c;used.add(c)}}
   const t=tOf(S.type);if(!t||tKind(t)!==S.kind)S.type=(tOf(S.typeBy[S.kind])&&tKind(tOf(S.typeBy[S.kind]))===S.kind)?S.typeBy[S.kind]:(typesOf(S.kind)[0]||S.types[0]).k;
 }
-function load(){try{const t=localStorage.getItem(KEY)||localStorage.getItem('as-is-v1')||localStorage.getItem('occ-plotter-v1');if(t){const o=JSON.parse(t);if(o&&o.floors&&o.floors.length){S=Object.assign(S,o);migrate();return}}}catch(e){}S.floors=[sampleFloor()];S.cur=0;migrate()}
+function load(){if(!DIST)try{const t=localStorage.getItem(KEY)||localStorage.getItem('as-is-v1')||localStorage.getItem('occ-plotter-v1');if(t){const o=JSON.parse(t);if(o&&o.floors&&o.floors.length){S=Object.assign(S,o);migrate();return}}}catch(e){}S.floors=[sampleFloor()];S.cur=0;migrate()}
 
 const F=()=>S.floors[S.cur];
 const nextNo=(f,kd)=>f.points.filter(p=>kindOf(p)===(kd||S.kind)).reduce((m,p)=>Math.max(m,+p.no||0),0)+1;
@@ -1599,7 +1632,8 @@ $('bUndo').onclick=doUndo;
 /* ---------- フロア ---------- */
 function readImage(file,cb){const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{
   let w=im.naturalWidth,h=im.naturalHeight,src=r.result;const MAX=4000;
-  if(Math.max(w,h)>MAX){const k=MAX/Math.max(w,h);w=Math.round(w*k);h=Math.round(h*k);const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(im,0,0,w,h);src=c.toDataURL('image/jpeg',0.9)}
+  /* 大きすぎる画像と、PNG・JPEGなど以外の形式（SVGなど）は、PNG／JPEGに描き直して使う */
+  if(Math.max(w,h)>MAX||!/^data:image\/(png|jpe?g|gif|webp|bmp);base64,/i.test(src)){const k=Math.min(1,MAX/Math.max(w,h));w=Math.round(w*k);h=Math.round(h*k);const c=document.createElement('canvas');c.width=w;c.height=h;const g2=c.getContext('2d');g2.fillStyle='#fff';g2.fillRect(0,0,w,h);g2.drawImage(im,0,0,w,h);src=c.toDataURL('image/jpeg',0.9)}
   cb({img:src,w,h})};im.onerror=()=>toast('画像を読み込めませんでした。PNG か JPG を選んでください');im.src=r.result};r.readAsDataURL(file)}
 $('fImg').onchange=e=>{const file=e.target.files[0];e.target.value='';if(!file)return;
   if(isPdf(file)){loadPdf(file,false);return}
@@ -1675,8 +1709,6 @@ async function loadPdf(file,replace){
 
 /* ---------- 出力・読込 ---------- */
 async function saveFile(name,blob){
-  let dl=null;try{if(window.claude&&window.claude.use)dl=await window.claude.use('downloads')}catch(e){}
-  if(dl){try{await dl.save({filename:name,data:blob});toast('保存しました')}catch(e){if(!e||e.code!=='declined')toast('保存できませんでした（'+((e&&e.code)||'エラー')+'）')}return true}
   try{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1500)}catch(e){}
   return window.top===window;
 }
@@ -1788,12 +1820,14 @@ $('bSave').onclick=()=>{
   document.querySelector('.fmenu')?.remove();
   const btn=$('bSave'),r=btn.getBoundingClientRect(),m=document.createElement('div');m.className='fmenu';m.style.left=r.left+'px';m.style.top=(r.bottom+6)+'px';
   m.innerHTML=`<button data-a="all"><b>作業ファイルを保存</b></button><div class="muted sm">図面・スペース・収納量のプロットをすべて保存します</div>
-    <div class="pal-sep"></div><button data-a="occ">スペースだけを保存（稼働率調査プロッター形式）</button><div class="muted sm">稼働率調査プロッター・分析ツールで開ける形式で書き出します</div>`;
+    <div class="pal-sep"></div><button data-a="occ">スペースだけを保存（稼働率調査プロッター形式）</button><div class="muted sm">稼働率調査プロッター・分析ツールで開ける形式で書き出します</div>
+    ${DIST?'<div class="pal-sep"></div><div class="muted sm">このファイルは作業内容をブラウザに保存しません。終わるときは「作業ファイルを保存」で保存してください。</div>':'<div class="pal-sep"></div><button data-a="wipe" class="danger">このPCに保存したデータを消す</button><div class="muted sm">ブラウザに自動保存した図面・プロット・エリアを消します（保存した作業ファイルは消えません）</div>'}`;
   document.body.appendChild(m);
   const close=()=>{m.remove();removeEventListener('pointerdown',out,true)};const out=e=>{if(!m.contains(e.target)&&e.target!==btn)close()};
   setTimeout(()=>addEventListener('pointerdown',out,true));
   m.onclick=e=>{const b=e.target.closest('button');if(!b)return;close();
-    if(b.dataset.a==='all')offer(`SPACE-COUNTER_作業ファイル_${stamp()}.json`,JSON.stringify(pkgAll()),'application/json');
+    if(b.dataset.a==='wipe'){wipeLocal();return}
+    if(b.dataset.a==='all'){dirty=false;offer(`SPACE-COUNTER_作業ファイル_${stamp()}.json`,JSON.stringify(pkgAll()),'application/json')}
     else offer(`稼働率調査_プロットデータ_${stamp()}.json`,JSON.stringify(pkgOcc()),'application/json')};
 };
 $('fJson').onchange=e=>{const file=e.target.files[0];e.target.value='';if(!file)return;const r=new FileReader();
@@ -1803,7 +1837,7 @@ $('fJson').onchange=e=>{const file=e.target.files[0];e.target.value='';if(!file)
       S.floors=o.floors;if(Array.isArray(o.types)&&o.types.length){S.types=o.types.map(t=>({...t,kind:legacy?'occ':(t.kind||'occ')}))}
       if(Array.isArray(o.depts))S.depts=o.depts;
       if(legacy)for(const f of S.floors)for(const p of f.points)p.kind='occ';
-      migrate();S.cur=0;sel=null;msel.clear();undo=[];renderAll(true);persist();
+      migrate();S.cur=0;sel=null;msel.clear();undo=[];renderAll(true);persist();dirty=false;
       toast(`${o.floors.length} フロアを読み込みました`+(legacy?'（稼働率調査プロッターの作業ファイル）':''))}
     catch(err){toast('このファイルは読み込めません。「保存」で作った作業ファイルを選んでください')}};r.readAsText(file)};
 
@@ -2693,8 +2727,19 @@ function auCommit(){
   const n=act.length;AU.cands=[];AU.area=null;AU.box=null;AU.phase='sample';sel=null;msel.clear();refresh();renderAuto();
   toast(`${n} 件をプロットしました（取り消しで一度に戻せます）。続けて探すときは、次の見本を囲んでください`)}
 
+
+/* ---------- このPCに保存したデータを消す ---------- */
+function wipeLocal(){
+  if(!confirm('このPCのブラウザに自動保存した、図面・プロット・エリアをすべて消します。\n（保存した作業ファイルは消えません。消したあとは元に戻せません）\n\n消してよいですか？'))return;
+  try{localStorage.removeItem(KEY)}catch(e){}
+  S={floors:[sampleFloor()],cur:0,type:'一般席',mode:'add',kind:'occ',view:'all',typeBy:{}};migrate();
+  undo=[];sel=null;msel.clear();asel.clear();applyPin();renderAll(true);persist();
+  toast('このPCに保存したデータを消しました')}
+/* 配布用：保存していない変更があるときは、閉じる前に確認する */
+addEventListener('beforeunload',e=>{if(DIST&&dirty){e.preventDefault();e.returnValue=''}});
 /* ---------- 起動 ---------- */
-load();applyPin();applyView();renderAll(true);
+load();applyPin();applyView();renderAll(true);dirty=false;
+if(DIST)setTimeout(()=>toast('このファイルは作業内容をブラウザに保存しません。終わるときは「保存」→「作業ファイルを保存」で保存してください'),600);
 new ResizeObserver(()=>{if(F()&&!drag)fit()}).observe(vp);
 })();
 </script>
