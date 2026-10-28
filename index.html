@@ -128,6 +128,9 @@ h2{font-size:11px;letter-spacing:.08em;color:var(--muted);margin:0;font-weight:6
 textarea{resize:vertical;min-height:44px}
 .muted{color:var(--muted)}
 .edit-head{display:flex;align-items:center;gap:10px}
+#rnBar{border-color:#f19479}.mk.rn b{box-shadow:0 0 0 3px #f19479,0 1px 3px rgba(0,0,0,.45)}
+.rn-how{display:grid;gap:6px}.rn-how label{display:flex;gap:8px;align-items:flex-start;padding:6px 8px;border:1px solid var(--line);border-radius:8px;cursor:pointer}.rn-how label:has(input:checked){border-color:var(--accent);background:rgba(63,114,216,.06)}.rn-how small{display:block;color:var(--muted);font-size:11px}
+.clip-bar{display:flex;align-items:center;gap:8px;padding:6px 8px;margin-bottom:10px;border:1px dashed var(--accent);border-radius:8px;font-size:12px}.clip-bar span{flex:1}
 #eTypeLbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .enav{display:inline-flex;gap:4px}
 .enav button{width:32px;height:32px;padding:0;justify-content:center;border-radius:50%}
@@ -370,7 +373,11 @@ header .adv{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8p
 .ar-role button{padding:5px 7px;font-size:12px}
 #areaBody .ar-cal .sl{grid-template-columns:96px 1fr 52px}
 .ar-svg .vh{fill:#fff;stroke:var(--c);stroke-width:2.5;vector-effect:non-scaling-stroke;cursor:move;r:calc(6px*var(--inv,1))}
-.ar-svg .eh{fill:var(--c);fill-opacity:.6;stroke:#fff;stroke-width:1.5;vector-effect:non-scaling-stroke;cursor:copy;r:calc(4px*var(--inv,1))}
+.ar-svg .eh{fill:var(--c);fill-opacity:.6;stroke:#fff;stroke-width:1.5;vector-effect:non-scaling-stroke;cursor:move;r:calc(4.5px*var(--inv,1))}
+.ar-svg .bb{fill:none;stroke:#3f72d8;stroke-width:1.2;stroke-dasharray:5 4;vector-effect:non-scaling-stroke;pointer-events:none}
+.ar-svg .bh{fill:#fff;stroke:#3f72d8;stroke-width:1.5;vector-effect:non-scaling-stroke;width:calc(9px*var(--inv,1));height:calc(9px*var(--inv,1))}
+.ar-svg .bh[data-bh=nw],.ar-svg .bh[data-bh=se]{cursor:nwse-resize}.ar-svg .bh[data-bh=ne],.ar-svg .bh[data-bh=sw]{cursor:nesw-resize}
+.ar-svg .bh[data-bh=n],.ar-svg .bh[data-bh=s]{cursor:ns-resize}.ar-svg .bh[data-bh=e],.ar-svg .bh[data-bh=w]{cursor:ew-resize}
 .ar-svg .pick{fill:rgba(63,114,216,.2);stroke:#3f72d8;stroke-width:2.5;stroke-dasharray:7 4;vector-effect:non-scaling-stroke;pointer-events:none}
 .ar-svg .pick.leak{fill:rgba(180,35,24,.14);stroke:#b42318}
 .ar-svg .pseed{fill:#3f72d8;stroke:#fff;stroke-width:2;vector-effect:non-scaling-stroke;r:calc(5px*var(--inv,1));pointer-events:none}
@@ -427,6 +434,7 @@ header .adv{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8p
       <button id="mAuto" aria-pressed="false" title="見本を1つ囲むと、図面から似たものを探して候補を並べます (F)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/><path d="M8 10.5h5M10.5 8v5"/></svg><span>見本から自動で探す</span></button>
       <div class="pal-area" id="areaTools" hidden><button data-t="rect" title="ドラッグで四角形のエリアを描きます (R)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="1"/></svg><span>四角形</span></button><button data-t="poly" title="クリックで角を置き、最初の点・ダブルクリック・Enterで閉じます (P)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18l2-12 8 3 4 9z"/></svg><span>多角形</span></button><button data-t="pick" title="部屋の床をクリックすると、壁や線で囲まれた範囲を自動で拾います (W)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l10-10"/><path d="M15 3v3M15 12v3M10.5 7.5h-2M21.5 7.5h-2M18 4.5l-1.5 1.5M13.5 9l-1.5 1.5"/></svg><span>拾う</span></button><button data-t="calib" title="寸法が分かる2点をクリックして、縮尺を決めます (C)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15l12-12 6 6-12 12z"/><path d="M7 11l2 2M10 8l2 2M13 5l2 2"/></svg><span>縮尺</span></button></div>
       <button id="bUndo" class="pal-edit" title="ひとつ前の状態に戻します (Ctrl+Z)"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/></svg><span>取り消し</span><kbd>Ctrl+Z</kbd></button>
+      <button id="bRenum" class="pal-edit" title="番号をまとめて振り直します（選んだプロットだけ。選んでいなければフロアの全部）。並び順から自動で、またはクリックした順に振れます"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6l2-1v8"/><path d="M5 13h4"/><path d="M5 17.5c0-1 1-1.5 2-1.5s2 .6 2 1.4c0 1.6-4 2.1-4 3.6h4"/><path d="M14 7h6M14 12h6M14 17h6"/></svg><span>番号を振り直す</span></button>
       <div class="pal-h2" id="palTypeH">追加するタイプ</div>
       <div class="pal-list" id="typeChips"></div>
       <div class="pal-sum" id="palSum" title="表示中のフロアの合計"></div>
@@ -456,6 +464,8 @@ header .adv{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8p
     <section id="secAuto" hidden></section>
     <section id="secEdit">
       <h2 id="secEditH">選択中のプロット</h2>
+      <div id="clipBar" class="clip-bar" hidden></div>
+      <div id="rnBar" class="clip-bar" hidden></div>
       <div id="areaBody" hidden style="display:flex;flex-direction:column;gap:10px"></div>
       <div id="editEmpty" class="muted">プロットをクリックすると、番号・タイプ・名称を編集できます。ドラッグで位置を移動できます。</div>
       <div id="bulkBody" hidden style="display:flex;flex-direction:column;gap:10px">
@@ -470,7 +480,7 @@ header .adv{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8p
         <div class="row" data-kind="stor"><span>段数</span><input type="number" id="kLev" min="1" step="1" placeholder="変更しない"></div>
         <div class="row" data-kind="stor"><span>幅(m)</span><input type="number" id="kWid" min="0" step="0.1" placeholder="変更しない"></div>
         <div class="row"><span>メモ</span><input type="text" id="kMemo" placeholder="変更しない"></div>
-        <div class="flex"><button class="primary" id="kApply">まとめて変更</button><button id="kRot" title="選択中のプロットの図形・数字を90°回します">まとめて90°回転</button><button class="danger" id="kDel">選択したプロットを削除</button></div>
+        <div class="flex"><button class="primary" id="kApply">まとめて変更</button><button id="kRot" title="選択中のプロットの図形・数字を90°回します">まとめて90°回転</button><button id="kCopy" title="選択中のプロットをコピーします（Ctrl+C）。別のフロアにも貼り付けられます">コピー</button><button id="kDup" title="選択中のプロットを、その場の少し横に複製します（Ctrl+D）">複製</button><button class="danger" id="kDel">選択したプロットを削除</button></div>
       </div>
       <div id="editBody" hidden style="display:flex;flex-direction:column;gap:10px">
         <div class="edit-head"><span class="badge" id="eBadge">1</span><span id="eTypeLbl"></span><span class="enav"><button id="ePrev" title="前の番号へ" aria-label="前の番号へ"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button><button id="eNext" title="次の番号へ" aria-label="次の番号へ"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button></span></div>
@@ -489,7 +499,7 @@ header .adv{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:2px 8p
         <div class="row" data-kind="stor"><span>収納量</span><b id="eFm" class="fmv">–</b></div>
         <div id="eDimWarn" class="warn" hidden>段数と幅を入力してください（収納量の計算に必要です）</div>
         <div class="row"><span>メモ</span><textarea id="eMemo" placeholder="備考"></textarea></div>
-        <div class="flex"><button id="eRot" title="図形・数字の向きを90°回します">向きを90°回転</button><button class="danger" id="eDel">このプロットを削除</button></div>
+        <div class="flex"><button id="eRot" title="図形・数字の向きを90°回します">向きを90°回転</button><button id="eCopy" title="このプロットをコピーします（Ctrl+C）。別のフロアにも貼り付けられます">コピー</button><button id="eDup" title="このプロットを、その場の少し横に複製します（Ctrl+D）">複製</button><button class="danger" id="eDel">このプロットを削除</button></div>
       </div>
     </section>
 
@@ -1321,7 +1331,7 @@ function renderMarks(){
   const sm=seqMap(f);
   for(const p of f.points){if(!visible(p))continue;const kd=kindOf(p),ed=kd===S.kind;
     const d=document.createElement('div');
-    d.className='mk'+(kd==='stor'?' sq':'')+(!ed?' other':'')+(p.id===sel||msel.has(p.id)?' on':'')+(ed&&cnt[kd+p.no]>1?' dup':'')+(ed&&missing(p)?' nocap':'')+(focusType&&p.type!==focusType?' dim':'');
+    d.className='mk'+(kd==='stor'?' sq':'')+(!ed?' other':'')+(p.id===sel||msel.has(p.id)?' on':'')+(ed&&cnt[kd+p.no]>1?' dup':'')+(ed&&missing(p)?' nocap':'')+(focusType&&p.type!==focusType||RN&&ed&&!RN.ids.has(p.id)?' dim':'')+(RN&&RN.order.includes(p.id)?' rn':'');
     d.style.left=p.x*f.w+'px';d.style.top=p.y*f.h+'px';d.style.setProperty('--c',color(p.type));d.style.setProperty('--rot',(+p.rot||0)+'deg');d.dataset.id=p.id;
     const tip=`No.${p.no}／${typeLabel(p,sm)}　`+(kd==='stor'?`${p.type}${p.name?' / '+p.name:''}　${+p.levels||'?'}段×${+p.width||'?'}m＝${fmt1(fmOf(p))}fm`:`${p.type}${p.name?' / '+p.name:''}　席数${p.cap||'?'}・${p.wp===''||p.wp==null?'?':p.wp}WP`);
     d.innerHTML=`<b title="${esc(tip)}">${esc(shownLabel(p,sm))}</b>`;marks.appendChild(d)}
@@ -1399,9 +1409,9 @@ $('missBox').addEventListener('click',e=>{if(!e.target.closest('#missGo'))return
   if(!visible(m))setView('all');select(m.id);centerOn(m);setTimeout(()=>$(S.kind==='stor'?(+m.levels>=1?'eWid':'eLev'):(noCap(m)?'eCap':'eWp')).focus(),0)});
 function renderList(){}
 function renderFloor(){}
-function renderHint(){$('hint').textContent=isArea()?areaHint():S.mode==='auto'?autoHint():S.mode==='add'
+function renderHint(){if(RN&&(!F()||F().id!==RN.fi||S.kind!==RN.kd||isArea()))rnEnd(true);$('hint').textContent=RN?`【番号の振り直し】振りたい順にプロットをクリック（${RN.order.length}／${RN.ids.size}）／ Backspace・Ctrl+Zで1つ戻す ／ Enterで完了（残りは今の順） ／ Escでやめる`:isArea()?areaHint():S.mode==='auto'?autoHint():S.mode==='add'
   ?`【${KIND_LABEL[S.kind]}】クリックで「${S.type}」${F()?(S.numMode==='type'?nextTypeLabel(F()):nextNo(F())+'番'):'1番'}を追加 ／ ドラッグで移動 ／ ホイールで拡大縮小・押したまま移動 ／ Shift+ドラッグで範囲選択`
-  :`【${KIND_LABEL[S.kind]}】左上のタイプを押すとそのタイプをまとめて選択（Shiftで追加） ／ ドラッグで範囲選択 ／ Shift+クリックで追加選択 ／ Ctrl+Aで全選択 ／ Deleteで削除 ／ ホイールを押したまま画面移動`}
+  :`【${KIND_LABEL[S.kind]}】左上のタイプを押すとそのタイプをまとめて選択（Shiftで追加） ／ ドラッグで範囲選択 ／ Shift+クリックで追加選択 ／ Ctrl+Aで全選択 ／ Ctrl+C・Ctrl+Vでコピー・貼り付け（Ctrl+Dで複製） ／ Deleteで削除 ／ ホイールを押したまま画面移動`}
 function renderOptions(){
   const ts=typesOf(S.kind),sq=S.kind!=='occ';
   $('typeChips').innerHTML=ts.map((t,i)=>`<button class="pt" data-k="${esc(t.k)}" style="--c:${t.c}" title="${esc(t.k)}（記号 ${esc(t.code||'')}${i<9?'／キー '+(i+1):''}）"><i${sq?' style="border-radius:3px"':''}>${esc(t.code||'･')}</i><span>${esc(t.k)}</span><em></em></button>`).join('');renderPalStats();
@@ -1421,7 +1431,7 @@ function renderAll(refit){renderOptions();
   if(f&&img.dataset.fid!==f.id+f.img.length){img.src=f.img;img.dataset.fid=f.id+f.img.length;img.width=f.w;img.height=f.h;refit=true}
   if(refit)requestAnimationFrame(fit);
   renderTabs();renderAreas();renderMarks();renderEdit();renderStats();renderList();renderFloor();renderHint();
-  $('areaTools').hidden=!isArea();$('mAuto').hidden=isArea();document.querySelectorAll('#areaTools button').forEach(b=>b.setAttribute('aria-pressed',S.mode==='add'&&S.atool===b.dataset.t));
+  $('areaTools').hidden=!isArea();$('mAuto').hidden=isArea();$('bRenum').hidden=isArea();document.querySelectorAll('#areaTools button').forEach(b=>b.setAttribute('aria-pressed',S.mode==='add'&&S.atool===b.dataset.t));
   $('mAdd').setAttribute('aria-pressed',S.mode==='add');$('mSel').setAttribute('aria-pressed',S.mode==='sel');$('mAuto').setAttribute('aria-pressed',S.mode==='auto');vp.classList.toggle('sel',S.mode==='sel');
   syncChips();renderAuto();
 }
@@ -1432,7 +1442,7 @@ const refresh=()=>{renderTabs();renderAreas();renderMarks();renderEdit();renderS
 function select(id){sel=id;msel.clear();renderMarks();renderEdit();renderList();renderStats();syncChips()}
 function centerOn(p){const f=F(),r=vp.getBoundingClientRect();view.tx=r.width/2-p.x*f.w*view.z;view.ty=r.height/2-p.y*f.h*view.z;applyView()}
 function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
-function toast(m){const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),2600)}
+function toast(m){document.querySelectorAll('.toast').forEach(t=>t.remove());const d=document.createElement('div');d.className='toast';d.textContent=m;document.body.appendChild(d);setTimeout(()=>d.remove(),2600)}   /* 新しい知らせが出たら古いものは消す（重ならないように） */
 
 /* ---------- スマートグリッド ---------- */
 S.snap=true;
@@ -1469,6 +1479,7 @@ vp.addEventListener('pointerdown',e=>{
   if(!F())return;
   if(e.button===1){e.preventDefault();vp.setPointerCapture(e.pointerId);hideGhost();drag={id:null,mid:true,sx:e.clientX,sy:e.clientY,tx:view.tx,ty:view.ty,moved:true};vp.classList.add('panning');return}
   if(e.button>0)return;if(e.target.closest('.zoom,.hint,.empty,.palette,.vp-busy'))return;
+  if(RN){const mk=e.target.closest('.mk');if(mk)rnClick(mk.dataset.id);return}
   if(isArea()){vp.setPointerCapture(e.pointerId);hideGhost();areaDown(e);return}
   if(S.mode==='auto'){vp.setPointerCapture(e.pointerId);hideGhost();
     if(AU.phase==='sample'||AU.phase==='area'){drag={abox:true,sx:e.clientX,sy:e.clientY,moved:false};return}
@@ -1482,6 +1493,7 @@ vp.addEventListener('pointerdown',e=>{
   else if(mk&&sel!==id)select(id);
 });
 vp.addEventListener('pointermove',e=>{
+  ptrImg=F()?toImg(e):null;
   if(!drag){
     if(isArea()){hideGhost();areaHover(e);return}
     if(S.mode!=='add'||!F()||e.pointerType==='touch'||e.target.closest('.mk:not(.ghost),.zoom,.hint,.palette')){hideGhost();return}
@@ -1518,7 +1530,7 @@ vp.addEventListener('pointerup',e=>{
   else{sel=null;refresh()}
 });
 vp.addEventListener('pointercancel',()=>{drag=null;$('marquee').hidden=true;vp.classList.remove('panning');showGuides(null)});
-vp.addEventListener('pointerleave',hideGhost);
+vp.addEventListener('pointerleave',()=>{hideGhost();ptrImg=null});
 vp.addEventListener('mousedown',e=>{if(e.button===1)e.preventDefault()});
 vp.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()});
 vp.addEventListener('wheel',e=>{if(!F())return;e.preventDefault();const r=vp.getBoundingClientRect();zoomAt(e.deltaY<0?1.15:1/1.15,e.clientX-r.left,e.clientY-r.top)},{passive:false});
@@ -1543,13 +1555,115 @@ $('zRot').onclick=async()=>{
 };
 addEventListener('resize',()=>{});
 
+/* ---------- コピー・貼り付け ----------
+   clip：コピーしたもの（このページを開いている間だけ。作業ファイルには入れない）。ptrImg：図面上のマウスの位置（0〜1）
+   貼り付け先：Ctrl+V はマウスの位置、ボタン・複製は同じフロアなら少し横、別のフロアなら同じ相対位置。
+   大きさ：両方のフロアに縮尺があれば実寸をそろえ、なければ図面の幅の比で合わせる */
+let clip=null,ptrImg=null;
+function selCopy(){const f=F();if(!f)return null;
+  if(isArea()){const as=(f.areas||[]).filter(a=>asel.has(a.id));return as.length?{what:'area',fi:f.id,w:f.w,h:f.h,mpp:mPerPx(f),items:as.map(a=>JSON.parse(JSON.stringify(a)))}:null}
+  const ids=msel.size>1?msel:new Set(sel?[sel]:[]),ps=f.points.filter(p=>ids.has(p.id)&&editable(p));
+  return ps.length?{what:'pt',kind:S.kind,fi:f.id,w:f.w,h:f.h,mpp:mPerPx(f),items:ps.map(p=>({...p}))}:null}
+const clipLabel=c=>(c.what==='area'?'エリア':KIND_LABEL[c.kind])+' '+c.items.length+'件';
+function doCopy(){const c=selCopy();if(!c){toast('コピーするものを選んでください');return}
+  clip=c;renderClip();toast(`${clipLabel(c)}をコピーしました。貼り付けたい所にマウスを置いて Ctrl+V（別のフロアにも貼り付けできます）`)}
+function doDup(){const c=selCopy();if(!c){toast('複製するものを選んでください');return}pasteClip(c,'dup')}
+function renderClip(){const el=$('clipBar');if(!el)return;if(!clip){el.hidden=true;return}el.hidden=false;
+  el.innerHTML=`<span>コピー中：${esc(clipLabel(clip))}</span><button data-c="paste" title="このフロアに貼り付けます（同じフロアなら少し横に、別のフロアなら同じ位置に）。図面の上でCtrl+Vを押すとマウスの位置に貼り付けます">貼り付け</button><button data-c="x" aria-label="コピーをやめる" title="コピーをやめる">×</button>`}
+$('clipBar').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.c==='x'){clip=null;renderClip();return}if(clip)pasteClip(clip,'btn')});
+function pasteClip(c,how){const f=F();if(!f||!c||!c.items.length)return;
+  const P=c.what==='pt'?c.items.map(p=>({x:p.x*c.w,y:p.y*c.h})):c.items.flatMap(a=>a.pts.map(p=>({x:p.x*c.w,y:p.y*c.h})));
+  const xs=P.map(p=>p.x),ys=P.map(p=>p.y),cx=(Math.min(...xs)+Math.max(...xs))/2,cy=(Math.min(...ys)+Math.max(...ys))/2;   /* 元の中心（元の図面のpx） */
+  const mpp=mPerPx(f),same=c.fi===f.id,k=same?1:(c.mpp&&mpp?c.mpp/mpp:f.w/c.w);
+  let tx,ty;
+  if(how==='mouse'&&ptrImg&&ptrImg.x>=0&&ptrImg.y>=0&&ptrImg.x<=1&&ptrImg.y<=1){tx=ptrImg.x*f.w;ty=ptrImg.y*f.h}
+  else if(same){const o=24/view.z;tx=cx+o;ty=cy+o}
+  else{tx=cx/c.w*f.w;ty=cy/c.h*f.h}
+  const at=(x,y)=>({x:clamp01((tx+(x*c.w-cx)*k)/f.w),y:clamp01((ty+(y*c.h-cy)*k)/f.h)});
+  if(c.what==='pt'){if(S.kind!==c.kind)setKind(c.kind,true);if(!visible({kind:c.kind}))S.view='all';
+    snap();const ids=[];
+    for(const s of c.items){const p={...s,id:uid(),no:nextNo(f,c.kind),...at(s.x,s.y)};applyTypeDims(p);autoWp(p);f.points.push(p);ids.push(p.id)}
+    applySel(ids)}
+  else{if(S.kind!=='area')setKind('area',true);if(S.mode==='auto')setMode('sel');
+    snap();f.areas=f.areas||[];let no=f.areas.reduce((m,x)=>Math.max(m,+x.no||0),0);const ids=[];
+    for(const s of c.items){const a={...JSON.parse(JSON.stringify(s)),id:uid(),no:++no,pts:s.pts.map(p=>at(p.x,p.y))};f.areas.push(a);ids.push(a.id)}
+    asel=new Set(ids);refresh()}
+  toast(`${clipLabel(c)}を${how==='dup'?'複製':'貼り付け'}しました（Ctrl+Zで戻せます）`)}
+
+/* ---------- 番号の振り直し ----------
+   対象：選んだプロット（選んでいなければ、このフロアの今の種別の全部）。対象は「開始番号」からの連番にし、
+   ほかのプロットは今の番号の順のまま残りの番号に入れる（番号は重ならない・欠番もなくなる）。
+   振り方：位置から自動（島ごと・行ごと・列ごと。自動検出と同じ並べ方）／クリックした順 */
+let RN=null,rnHow='island';   /* RN：クリックで振っている途中 {fi,kd,ids,start,order:[id],base:Map(id→元の番号)} */
+function renumTargets(){const f=F(),kd=S.kind,all=f.points.filter(p=>kindOf(p)===kd),ids=msel.size>1?msel:sel?new Set([sel]):null;
+  const t=ids?all.filter(p=>ids.has(p.id)):all;return{kd,all,t,partial:!!ids&&t.length>0&&t.length<all.length}}
+function applyNumbers(kd,ordered,start,base){const f=F(),key=p=>base?base.get(p.id)??(+p.no||0):(+p.no||0);
+  const all=f.points.filter(p=>kindOf(p)===kd).sort((a,b)=>key(a)-key(b)),set=new Set(ordered),m=ordered.length;
+  start=Math.min(Math.max(1,Math.round(start)||1),all.length-m+1);
+  ordered.forEach((p,i)=>p.no=start+i);let k=1;for(const p of all){if(set.has(p))continue;if(k===start)k+=m;p.no=k++}}
+function posOrder(ps,how){const f=F(),L=ps.map(p=>({p,x:p.x*f.w,y:p.y*f.h}));if(L.length<2)return ps;
+  const nn=L.map(a=>{let b=Infinity,b2=Infinity;for(const c of L){if(c===a)continue;const d=Math.hypot(a.x-c.x,a.y-c.y);if(d<b){b2=b;b=d}else if(d<b2)b2=d}return[b,b2]});
+  const med=v=>{const s2=v.filter(isFinite).sort((a,b)=>a-b);return s2.length?s2[s2.length>>1]:20};
+  const tol=Math.max(4,med(nn.map(v=>v[0]))*0.35);   /* 同じ行・列とみなすずれ */
+  const rows=ls=>bands(ls,c=>c.y,tol).flatMap(b=>b.sort((a,c)=>a.x-c.x)),cols=ls=>bands(ls,c=>c.x,tol).flatMap(b=>b.sort((a,c)=>a.y-c.y));
+  let out;
+  if(how==='row')out=rows(L);else if(how==='col')out=cols(L);
+  else{/* 島ごと：となりの席（2番目に近い席）までの間隔の目安より近いものを同じ島に */
+    const T=med(nn.map(v=>v[1]))*1.25,par=L.map((_,i)=>i),root=i=>{while(par[i]!==i)i=par[i]=par[par[i]];return i};
+    for(let i=0;i<L.length;i++)for(let j=i+1;j<L.length;j++)if(Math.hypot(L[i].x-L[j].x,L[i].y-L[j].y)<T)par[root(i)]=root(j);
+    const g=new Map();L.forEach((c,i)=>{const r=root(i);if(!g.has(r))g.set(r,[]);g.get(r).push(c)});
+    const isl=[...g.values()].map(q=>({ps:q,x0:Math.min(...q.map(c=>c.x)),y0:Math.min(...q.map(c=>c.y)),x1:Math.max(...q.map(c=>c.x)),y1:Math.max(...q.map(c=>c.y))}));
+    const hs=isl.map(q=>q.y1-q.y0).sort((a,b)=>a-b),bt=Math.max(tol,(hs[hs.length>>1]||0)*0.5);
+    out=bands(isl,q=>q.y0,bt).flatMap(b=>b.sort((a,c)=>a.x0-c.x0)).flatMap(q=>q.x1-q.x0>=q.y1-q.y0?rows(q.ps):cols(q.ps))}
+  return out.map(c=>c.p)}
+function renumDialog(){const f=F();if(!f||isArea())return;if(S.mode==='auto')setMode('sel');
+  const {kd,all,t,partial}=renumTargets();if(!t.length){toast('振り直すプロットがありません');return}
+  const st0=partial?Math.min(...t.map(p=>+p.no||1)):1,mx=all.length-t.length+1;
+  const opt=(v,lbl,sub)=>`<label><input type="radio" name="rnHow" value="${v}" ${rnHow===v?'checked':''}><span>${lbl}<small>${sub}</small></span></label>`;
+  const m=document.createElement('div');m.className='modal';
+  m.innerHTML=`<div class="sv" role="dialog" aria-label="番号の振り直し"><div class="sv-h"><b>番号の振り直し：${esc(f.name)}</b><button id="rnX" aria-label="閉じる">×</button></div>
+    <div class="muted sm">対象：${partial?`選んだ${KIND_LABEL[kd]} ${t.length} 件（ほかの ${all.length-t.length} 件は今の順のまま、残りの番号に入ります）`:`このフロアの${KIND_LABEL[kd]} ${t.length} 件すべて`}</div>
+    <div class="rn-how">${opt('island','島ごと','島を左上から行ごとに、島の中は長い向きに沿って')}${opt('row','左上から行ごと','上の行から、行の中は左から右へ')}${opt('col','左上から列ごと','左の列から、列の中は上から下へ')}${opt('click','クリックした順','図面で振りたい順にプロットをクリック（自動の並びを手直ししたいときに）')}</div>
+    <div class="flex al"${partial?'':' hidden'}><span class="sm">開始番号</span><input type="number" id="rnStart" min="1" max="${mx}" step="1" value="${st0}" style="width:90px" aria-label="開始番号" title="選んだプロットに振る最初の番号"><span class="muted sm">（1〜${mx}。選んだ分はこの番号からの連番）</span></div>
+    <div class="flex" style="justify-content:flex-end"><button id="rnCancel">キャンセル</button><button class="primary" id="rnGo"></button></div></div>`;
+  document.body.appendChild(m);const q=x=>m.querySelector(x),close=()=>m.remove();
+  const how=()=>(m.querySelector('input[name=rnHow]:checked')||{}).value||'island';
+  const lbl=()=>{q('#rnGo').textContent=how()==='click'?'クリックを始める':'振り直す'};lbl();m.addEventListener('change',lbl);
+  q('#rnX').onclick=q('#rnCancel').onclick=close;m.addEventListener('click',e=>{if(e.target===m)close()});
+  q('#rnStart').addEventListener('keydown',e=>{if(e.key==='Enter')q('#rnGo').click();e.stopPropagation()});
+  q('#rnGo').onclick=()=>{rnHow=how();const start=Math.min(Math.max(1,Math.round(+q('#rnStart').value)||1),mx);close();
+    if(rnHow==='click'){snap();RN={fi:f.id,kd,ids:new Set(t.map(p=>p.id)),start,order:[],base:new Map(all.map(p=>[p.id,+p.no||0]))};sel=null;msel.clear();refresh();renderRn();
+      toast('振りたい順にプロットをクリックしてください（Enterで完了、Escでやめる）');return}
+    snap();applyNumbers(kd,posOrder(t,rnHow),start);refresh();toast(`${t.length} 件の番号を振り直しました（Ctrl+Zで戻せます）`)}}
+function rnApply(){const f=F();if(!RN||!f)return;const byId=new Map(f.points.map(p=>[p.id,p]));
+  const first=RN.order.map(id=>byId.get(id)).filter(Boolean),rest=f.points.filter(p=>RN.ids.has(p.id)&&!RN.order.includes(p.id)).sort((a,b)=>RN.base.get(a.id)-RN.base.get(b.id));
+  applyNumbers(RN.kd,[...first,...rest],RN.start,RN.base);refresh();renderRn()}
+function rnClick(id){if(!RN||!RN.ids.has(id)||RN.order.includes(id))return;RN.order.push(id);rnApply();if(RN.order.length===RN.ids.size)rnEnd(true)}
+function rnBack(){if(!RN||!RN.order.length)return;RN.order.pop();rnApply()}
+function rnEnd(ok){if(!RN)return;const n=RN.order.length,f=F();
+  if(!ok){if(f&&f.id===RN.fi)for(const p of f.points)if(RN.base.has(p.id))p.no=RN.base.get(p.id);undo.pop()}
+  RN=null;renderRn();refresh();toast(ok?`${n} 件をクリックした順に振り直しました（Ctrl+Zで戻せます）`:'番号の振り直しをやめました')}
+function renderRn(){const el=$('rnBar');if(!el)return;if(!RN){el.hidden=true;return}el.hidden=false;
+  el.innerHTML=`<span>番号の振り直し中：${RN.order.length}／${RN.ids.size} 件</span><button data-r="back" title="最後にクリックした1つを戻します（Backspace）">1つ戻す</button><button data-r="ok" class="primary" title="残りは今の順のまま後ろに続けます（Enter）">完了</button><button data-r="x" title="振り直す前に戻します（Esc）">やめる</button>`}
+$('rnBar').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.r==='back')rnBack();else rnEnd(b.dataset.r==='ok')});
+$('bRenum').onclick=renumDialog;
+
 /* ---------- キーボード ---------- */
 document.addEventListener('keydown',e=>{
   const typing=/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if(RN&&!typing){const k=e.key.toLowerCase();
+    if(k==='escape'){e.preventDefault();rnEnd(false);return}
+    if(k==='enter'){e.preventDefault();rnEnd(true);return}
+    if(k==='backspace'||(e.ctrlKey||e.metaKey)&&k==='z'){e.preventDefault();rnBack();return}
+    return}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!typing){e.preventDefault();doUndo();return}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'&&!typing&&F()&&isArea()){e.preventDefault();asel=new Set((F().areas||[]).map(a=>a.id));refresh();return}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'&&!typing&&F()){e.preventDefault();applySel(F().points.filter(editable).map(p=>p.id));return}
   if(typing)return;
+  if((e.ctrlKey||e.metaKey)&&!e.altKey&&F()&&S.mode!=='auto'){const k=e.key.toLowerCase();
+    if(k==='c'){if(selCopy()){e.preventDefault();doCopy()}return}
+    if(k==='v'){if(clip){e.preventDefault();pasteClip(clip,'mouse')}return}
+    if(k==='d'){e.preventDefault();doDup();return}}
   if(isArea()&&!e.ctrlKey&&!e.metaKey&&areaKey(e))return;
   if(e.key==='a'||e.key==='A'){setMode('add')}
   else if(e.key==='v'||e.key==='V'){setMode('sel')}
@@ -1592,6 +1706,8 @@ function delSel(){const f=F();if(!f||!sel)return;const d=f.points.find(x=>x.id==
   closeGaps(f,[d]);
   sel=null;refresh()}
 $('eDel').onclick=delSel;
+$('eCopy').onclick=$('kCopy').onclick=()=>doCopy();
+$('eDup').onclick=$('kDup').onclick=()=>doDup();
 function delMany(ids){const f=F();if(!f)return;const del=new Set(ids),rm=f.points.filter(x=>del.has(x.id));if(!rm.length)return;snap();
   f.points=f.points.filter(x=>!del.has(x.id));
   closeGaps(f,rm);
@@ -2194,7 +2310,12 @@ function renderAreas(){
   if(on&&adraw)h+=(S.atool==='calib'?`<line id="arDraft" class="draft" x1="${adraw.pts[0].x*f.w}" y1="${adraw.pts[0].y*f.h}" x2="${adraw.pts[0].x*f.w}" y2="${adraw.pts[0].y*f.h}"/>`:`<polyline id="arDraft" class="draft" points="${adraw.pts.map(pt).join(' ')}"/>`)
     +adraw.pts.map((p,i)=>`<circle class="dv${i===0?' first':''}" cx="${p.x*f.w}" cy="${p.y*f.h}"/>`).join('');
   if(on&&S.mode==='sel'&&asel.size===1){const r=st.rows.get([...asel][0]);if(r){const n=r.P.length,c0=color(r.a.cat);
-    h+=r.P.map((p,i)=>{const q=r.P[(i+1)%n];return`<circle class="eh" data-aid="${r.a.id}" data-ei="${i}" cx="${(p.x+q.x)/2}" cy="${(p.y+q.y)/2}" style="--c:${c0}"><title>ドラッグで角を足す</title></circle>`}).join('')
+    /* 外枠（バウンディングボックス）：図形から少し離して描き、8か所の印で拡大・縮小 */
+    const xs=r.P.map(p=>p.x),ys=r.P.map(p=>p.y),x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys),xm=(x0+x1)/2,ym=(y0+y1)/2,G=10;
+    h+=`<rect class="bb" style="x:calc(${x0}px - ${G}px*var(--inv,1));y:calc(${y0}px - ${G}px*var(--inv,1));width:calc(${x1-x0}px + ${2*G}px*var(--inv,1));height:calc(${y1-y0}px + ${2*G}px*var(--inv,1))"/>`
+      +[['nw',x0,y0,-1,-1],['n',xm,y0,0,-1],['ne',x1,y0,1,-1],['e',x1,ym,1,0],['se',x1,y1,1,1],['s',xm,y1,0,1],['sw',x0,y1,-1,1],['w',x0,ym,-1,0]].map(([k,x,y,sx,sy])=>
+        `<rect class="bh" data-aid="${r.a.id}" data-bh="${k}" style="x:calc(${x}px + ${sx*G-4.5}px*var(--inv,1));y:calc(${y}px + ${sy*G-4.5}px*var(--inv,1))"><title>ドラッグで、外枠のこの辺に乗っている角を平行に動かす（Shift＋ドラッグで形全体を拡大・縮小）</title></rect>`).join('');
+    h+=r.P.map((p,i)=>{const q=r.P[(i+1)%n];return`<circle class="eh" data-aid="${r.a.id}" data-ei="${i}" cx="${(p.x+q.x)/2}" cy="${(p.y+q.y)/2}" style="--c:${c0}"><title>ドラッグで辺を平行に動かす（Alt＋ドラッグで角を足す）</title></circle>`}).join('')
       +r.P.map((p,i)=>`<circle class="vh" data-aid="${r.a.id}" data-vi="${i}" cx="${p.x}" cy="${p.y}" style="--c:${c0}"><title>ドラッグで角を動かす（Alt＋クリックで消す）</title></circle>`).join('')}}
   if(on&&apick&&apick.key===pickKey(f)&&apick.res.ok)h+=`<polygon class="pick${apick.res.leak?' leak':''}" points="${apick.res.poly.map(p=>p.x+','+p.y).join(' ')}"/>`;
   if(on&&apick&&apick.key===pickKey(f))h+=apick.ol?apick.seeds.map(i=>`<circle class="pseed" cx="${i%f.w}" cy="${Math.floor(i/f.w)}"/>`).join(''):`<circle class="pseed" cx="${apick.x}" cy="${apick.y}"/>`;
@@ -2208,7 +2329,7 @@ function renderAreas(){
     h+=`<div class="arl ${ro}${on?'':' other'}" style="left:${r.c.x}px;top:${r.c.y}px;--c:${color(a.cat)}"><i>${ro==='ded'?'控除 ':''}${esc(r.label)}${a.name?' '+esc(a.name):''}</i>${lines.filter(Boolean).map(l=>`<span>${l}</span>`).join('')}</div>`}
   areaLayer.innerHTML=h}
 function areaHint(){const f=F(),cal=f&&!f.calib&&S.atool!=='calib'?'　※先に「縮尺」で基準線を引くと面積が出ます':'';
-  if(S.mode==='sel')return(asel.size===1?'【面積】角の印をドラッグで角を動かす（Altで吸い付きなし）／ 辺の中ほどの印をドラッグで角を足す ／ Alt＋クリックで角を消す ／ ':'【面積】エリアをクリックで選択（Shiftで追加）／ ')+'ドラッグで移動 ／ 何もない所をドラッグで範囲選択 ／ Deleteで削除'+cal;
+  if(S.mode==='sel')return(asel.size===1?'【面積】外枠の□でその辺を平行に動かす（Shiftで形全体を拡大・縮小）／ 辺の中ほどの印で辺を平行に動かす（Alt＋ドラッグで角を足す）／ 角の印で角を動かす（Alt＋クリックで消す）／ ':'【面積】エリアをクリックで選択（Shiftで追加）／ ')+'ドラッグで移動 ／ 何もない所をドラッグで範囲選択 ／ Deleteで削除'+cal;
   return({rect:'【面積】ドラッグで四角形のエリアを描く ／ クリックでエリアを選択 ／ ホイールで拡大縮小・押したまま画面移動',
     poly:adraw?'【面積】クリックで角を追加（Shiftで水平・垂直）／ 最初の点・ダブルクリック・Enterで閉じる ／ Backspaceで1点戻す ／ Escでやめる':'【面積】クリックで多角形の角を置いていく ／ ドラッグで画面移動',
     pick:S.pick.mode==='outline'?'【外周】建物の外側の余白をクリック ／ Shift＋クリックで外側を足す ／ 右の欄の「この形でエリアにする」（Enter）／ Escでやめる':apick?'【拾う】形を確かめて、右の欄の「この形でエリアにする」（Enter）／ 別の所をクリックで拾い直す ／ Escでやめる':'【拾う】部屋の床（家具のない所）をクリックすると、壁や線で囲まれた範囲を拾う ／ ドラッグで画面移動',
@@ -2241,14 +2362,14 @@ function renderAreaEdit(){
       ${roleSeg(ro)}
       <div class="ar-nums" id="aNums"></div>
       <div class="row"><span>メモ</span><textarea data-f="memo" placeholder="備考">${esc(a.memo)}</textarea></div>
-      <div class="flex"><button class="danger" data-a="del">このエリアを削除</button></div>${cal}`}
+      <div class="flex"><button data-a="copy" title="選択中のエリアをコピーします（Ctrl+C）。別のフロアにも貼り付けられます">コピー</button><button data-a="dup" title="選択中のエリアを、その場の少し横に複製します（Ctrl+D）">複製</button><button class="danger" data-a="del">このエリアを削除</button></div>${cal}`}
   else el.innerHTML=`<div class="edit-head"><span class="badge" style="--c:var(--accent)">${ids.length}</span><span style="flex:1">件を選択中</span><button data-a="clr">選択を解除</button></div>
       <div class="ar-nums" id="aNums"></div>
       <div class="row"><span>カテゴリ</span>${catSel('',true)}</div>
       ${roleSeg('')}
       <div class="ar-cal"><b>図形の組み合わせ</b><span class="muted sm">基準：<b>${esc((st.rows.get(ids[0])||{}).label||'')}</b>（最初に選んだエリア）。結果は基準のカテゴリ・名称・区分を引き継ぎます。離れた形は別々のエリアに、中の穴は「控除」のエリアになります。</span>
         <div class="flex"><button data-b="union" title="選んだエリアを1つにまとめます">合体</button><button data-b="diff" title="基準のエリアから、ほかのエリアを差し引きます">差し引き</button><button data-b="inter" title="選んだエリアが重なった部分だけを残します">重なり</button></div></div>
-      <div class="flex"><button class="danger" data-a="del">選択した ${ids.length} 件を削除</button></div>`;
+      <div class="flex"><button data-a="copy" title="選択中のエリアをコピーします（Ctrl+C）。別のフロアにも貼り付けられます">コピー</button><button data-a="dup" title="選択中のエリアを、その場の少し横に複製します（Ctrl+D）">複製</button><button class="danger" data-a="del">選択した ${ids.length} 件を削除</button></div>`;
   updAreaNums(st)}
 function updAreaNums(st){const box=$('aNums');if(!box)return;const ids=[...asel];
   if(ids.length===1){const r=st.rows.get(ids[0]);if(!r)return;const hostTxt=r.host?`${esc(r.host.label)}${r.host.a.name?'（'+esc(r.host.a.name)+'）':''}`:'';
@@ -2286,10 +2407,16 @@ function renderAreaPalStats(){
 /* ---- 操作 ---- */
 function areaDown(e){
   const ar=e.target.closest('[data-aid]'),id=ar?ar.dataset.aid:null,b={area:true,sx:e.clientX,sy:e.clientY,tx:view.tx,ty:view.ty,moved:false};
-  /* 角の印（動かす・Altで消す）／辺の中ほどの印（角を足す） */
+  /* 外枠の印（拡大・縮小） */
+  const bh=e.target.closest('.bh');
+  if(bh&&S.mode==='sel'){const f=F(),a=(f.areas||[]).find(x=>x.id===bh.dataset.aid);if(!a)return;
+    const xs=a.pts.map(p=>p.x),ys=a.pts.map(p=>p.y);
+    drag={...b,bbox:true,aid:a.id,k:bh.dataset.bh,sp:toImg(e),start:a.pts.map(p=>({...p})),bx0:Math.min(...xs),bx1:Math.max(...xs),by0:Math.min(...ys),by1:Math.max(...ys)};return}
+  /* 角の印（動かす・Altで消す）／辺の中ほどの印（辺を平行に動かす・Alt＋ドラッグで角を足す） */
   const hv=e.target.closest('.vh,.eh');
   if(hv&&S.mode==='sel'){const a=(F().areas||[]).find(x=>x.id===hv.dataset.aid);if(!a)return;
     if(hv.classList.contains('vh')&&e.altKey){if(a.pts.length<=3){toast('角は3つ以上必要です');return}snap();a.pts.splice(+hv.dataset.vi,1);a.shape='poly';drag=null;refresh();return}
+    if(hv.classList.contains('eh')&&!e.altKey){drag={...b,edge:true,aid:a.id,ei:+hv.dataset.ei,sp:toImg(e),start:a.pts.map(p=>({...p}))};return}
     drag={...b,vtx:true,aid:a.id,vi:hv.classList.contains('vh')?+hv.dataset.vi:null,ei:hv.classList.contains('eh')?+hv.dataset.ei:null};return}
   if(S.mode==='add'&&S.atool==='pick'){drag={...b,click:true};return}
   if(S.mode==='add'&&(S.atool==='poly'||S.atool==='calib')){drag={...b,click:true};return}
@@ -2298,6 +2425,40 @@ function areaDown(e){
   if(id){if(!asel.has(id)){asel=new Set([id]);refresh()}drag={...b,move:true,sp:toImg(e),start:new Map((F().areas||[]).filter(a=>asel.has(a.id)).map(a=>[a.id,a.pts.map(p=>({...p}))]))};return}
   drag={...b,mq:true,add:e.shiftKey}}
 function areaMove(e,d,dx,dy){
+  if(d.bbox){const f=F(),a=(f.areas||[]).find(x=>x.id===d.aid);if(!a)return;d.moved=true;if(!d.snapped){d.snapped=true;snap()}
+    const q=toImg(e),k=d.k,W=f.w,H=f.h,min=4/view.z,mx=(q.x-d.sp.x)*W,my=(q.y-d.sp.y)*H;   /* 押した所からの移動量 */
+    if(e.shiftKey){/* Shift：形全体を、縦横の比率を保って拡大・縮小（反対側の辺・角は動かない。上下左右の□では中心を基準に） */
+      const ax=k.includes('w')?d.bx1:k.includes('e')?d.bx0:(d.bx0+d.bx1)/2,ay=k.includes('n')?d.by1:k.includes('s')?d.by0:(d.by0+d.by1)/2;
+      const ow=(d.bx1-d.bx0)*W,oh=(d.by1-d.by0)*H;let sx=1,sy=1;
+      if(/[ew]/.test(k)&&ow>0)sx=Math.max(min,ow+(k.includes('w')?-mx:mx))/ow;
+      if(/[ns]/.test(k)&&oh>0)sy=Math.max(min,oh+(k.includes('n')?-my:my))/oh;
+      const sc=k.length===2?Math.max(sx,sy):/[ew]/.test(k)?sx:sy;
+      a.pts=d.start.map(p=>({x:clamp01(ax+(p.x-ax)*sc),y:clamp01(ay+(p.y-ay)*sc)}));renderAreas();return}
+    /* ふつう：外枠のその辺の上にある角だけを平行に動かす（ほかの角・へこみは動かさない）。四隅の□は2つの辺を動かす */
+    const P=d.start.map(p=>({x:p.x*W,y:p.y*H})),tol=Math.max(.5,1.5/view.z),X0=d.bx0*W,X1=d.bx1*W,Y0=d.by0*H,Y1=d.by1*H;
+    const onW=P.map(p=>p.x-X0<=tol),onE=P.map(p=>X1-p.x<=tol),onN=P.map(p=>p.y-Y0<=tol),onS=P.map(p=>Y1-p.y<=tol);
+    const rest=(on,get)=>P.filter((_,i)=>!on[i]).map(get);   /* その辺に乗っていない角（越えないように止める） */
+    let dxE=0,dxW=0,dyN=0,dyS=0;
+    if(k.includes('e')){const r=rest(onE,p=>p.x);dxE=r.length?Math.max(mx,Math.max(...r)+min-X1):mx}
+    if(k.includes('w')){const r=rest(onW,p=>p.x);dxW=r.length?Math.min(mx,Math.min(...r)-min-X0):mx}
+    if(k.includes('s')){const r=rest(onS,p=>p.y);dyS=r.length?Math.max(my,Math.max(...r)+min-Y1):my}
+    if(k.includes('n')){const r=rest(onN,p=>p.y);dyN=r.length?Math.min(my,Math.min(...r)-min-Y0):my}
+    a.pts=P.map((p,i)=>({x:clamp01((p.x+(onE[i]&&!onW[i]?dxE:0)+(onW[i]&&!onE[i]?dxW:0))/W),y:clamp01((p.y+(onS[i]&&!onN[i]?dyS:0)+(onN[i]&&!onS[i]?dyN:0))/H)}));renderAreas();return}
+  if(d.edge){const f=F(),a=(f.areas||[]).find(x=>x.id===d.aid);if(!a)return;d.moved=true;if(!d.snapped){d.snapped=true;snap()}
+    const W=f.w,H=f.h,P=d.start.map(p=>({x:p.x*W,y:p.y*H})),n=P.length;
+    /* 押した辺と一直線につながる辺（向きの差 2°ほどまで）は、ひとつの辺としてまとめて動かす */
+    const dir=(p,q)=>{const dx=q.x-p.x,dy=q.y-p.y,l=Math.hypot(dx,dy)||1;return{x:dx/l,y:dy/l}},u0=dir(P[d.ei],P[(d.ei+1)%n]);
+    const col=k=>{const v=dir(P[k],P[(k+1)%n]);return Math.abs(u0.x*v.y-u0.y*v.x)<0.035&&u0.x*v.x+u0.y*v.y>0};
+    let i=d.ei,j=(d.ei+1)%n,c=0;while(c<n-3&&col((i-1+n)%n)){i=(i-1+n)%n;c++}while(c<n-3&&col(j)){j=(j+1)%n;c++}
+    const mid=new Set();for(let k=(i+1)%n;k!==j;k=(k+1)%n)mid.add(k);
+    const A=P[i],B=P[j],dx0=B.x-A.x,dy0=B.y-A.y,L=Math.hypot(dx0,dy0)||1,nx=-dy0/L,ny=dx0/L,q=toImg(e);
+    const t=((q.x-d.sp.x)*W)*nx+((q.y-d.sp.y)*H)*ny;   /* 辺に直角な方向の移動量 */
+    /* 新しい辺の線と、となりの辺の線の交点に角を移す（となりの辺の向きは変えない） */
+    const meet=(o,u)=>{const ax=A.x+nx*t,ay=A.y+ny*t,cr=dx0*u.y-dy0*u.x;if(Math.abs(cr)<=1e-6*L*(Math.hypot(u.x,u.y)||1))return null;
+      const s2=((o.x-ax)*dy0-(o.y-ay)*dx0)/cr;return{x:o.x+u.x*s2,y:o.y+u.y*s2}};
+    const pv=P[(i-1+n)%n],nx2=P[(j+1)%n];
+    const Ai=meet(pv,{x:A.x-pv.x,y:A.y-pv.y})||{x:A.x+nx*t,y:A.y+ny*t},Bj=meet(nx2,{x:B.x-nx2.x,y:B.y-nx2.y})||{x:B.x+nx*t,y:B.y+ny*t};
+    a.pts=P.map((p,k)=>{const r=k===i?Ai:k===j?Bj:mid.has(k)?{x:p.x+nx*t,y:p.y+ny*t}:p;return{x:clamp01(r.x/W),y:clamp01(r.y/H)}});renderAreas();return}
   if(d.vtx){const f=F(),a=(f.areas||[]).find(x=>x.id===d.aid);if(!a)return;d.moved=true;
     if(!d.snapped){d.snapped=true;snap();a.shape='poly';if(d.ei!=null){a.pts.splice(d.ei+1,0,{x:0,y:0});d.vi=d.ei+1}}
     const q0=toImg(e),q={x:clamp01(q0.x),y:clamp01(q0.y)};
@@ -2312,7 +2473,7 @@ function areaMove(e,d,dx,dy){
     for(const a of f.areas){const s=d.start.get(a.id);if(s)a.pts=s.map(p=>({x:clamp01(p.x+ddx),y:clamp01(p.y+ddy)}))}renderAreas()}}
 function areaUp(e,d){
   const f=F();
-  if(d.vtx){if(d.snapped)refresh();return}
+  if(d.vtx||d.edge||d.bbox){if(d.snapped)refresh();return}
   if(d.mq){$('marquee').hidden=true;if(!d.moved){if(!d.add){asel.clear();refresh()}return}
     const r=vp.getBoundingClientRect(),x1=Math.min(d.sx,e.clientX),x2=Math.max(d.sx,e.clientX),y1=Math.min(d.sy,e.clientY),y2=Math.max(d.sy,e.clientY);
     const ids=[...areaStats(f).rows.values()].filter(rw=>{const x=r.left+view.tx+rw.c.x*view.z,y=r.top+view.ty+rw.c.y*view.z;return x>=x1&&x<=x2&&y>=y1&&y<=y2}).map(rw=>rw.a.id);
@@ -2384,6 +2545,8 @@ $('areaBody').addEventListener('click',e=>{const b=e.target.closest('button');if
   if(b.dataset.a==='cal'){setAtool('calib');return}
   if(b.dataset.a==='calnum'){const c=f.calib;if(c)calibDialog({x:c.x1,y:c.y1},{x:c.x2,y:c.y2});return}
   if(b.dataset.a==='clr'){asel.clear();refresh();return}
+  if(b.dataset.a==='copy'){doCopy();return}
+  if(b.dataset.a==='dup'){doDup();return}
   if(b.dataset.a==='del'){if(asel.size>1&&b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent=`もう一度押すと ${asel.size} 件を削除`;return}delAreas([...asel]);return}
   if(b.dataset.r){const ro=b.dataset.r;snap();for(const a of f.areas)if(asel.has(a.id)){a.role=ro;a.sign=ro==='ded'?-1:ro==='add'?1:0}refresh()}});
 $('areaBody').addEventListener('change',e=>{const t=e.target;if(t.dataset.f!=='cat')return;const f=F();if(!f)return;
